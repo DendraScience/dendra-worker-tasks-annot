@@ -1,0 +1,52 @@
+{
+  "name": "@dendra-science/worker-tasks-annot",
+  "version": "1.0.0",
+  "description": "Worker tasks for performing annotation side-effects.",
+  "license": "BSD-2-Clause-FreeBSD",
+  "author": "J. Scott Smith <scott@newleafsolutionsinc.com>",
+  "main": "dist/index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DendraScience/dendra-worker-tasks-annot.git"
+  },
+  "scripts": {
+    "babel": "babel src -d dist",
+    "build": "npm run lint && npm run clean && npm run babel",
+    "clean": "rm -rf dist/*",
+    "lint": "eslint src",
+    "lint-test": "eslint test",
+    "test": "npm run lint-test && NODE_ENV=test mocha test --recursive --use_strict",
+    "test-gc": "npm run lint-test && NODE_ENV=test mocha test -gc --recursive --use_strict",
+    "test:build": "npm run build && npm run test",
+    "test:watch": "chokidar --initial 'src/**/*.js' 'test/**/*.js' -c 'npm run test:build'"
+  },
+  "engines": {
+    "node": ">=10.15.1"
+  },
+  "dependencies": {
+    "lodash": "^4.17.11",
+    "moment": "^2.24.0",
+    "node-nats-streaming": "0.0.52"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.2.3",
+    "@babel/core": "^7.2.2",
+    "@babel/preset-env": "^7.3.1",
+    "@dendra-science/task-machine": "0.1.2",
+    "@feathersjs/authentication-client": "^1.0.2",
+    "@feathersjs/feathers": "^3.3.1",
+    "@feathersjs/rest-client": "^1.4.7",
+    "chai": "^4.2.0",
+    "eslint": "^5.13.0",
+    "eslint-config-standard": "^12.0.0",
+    "eslint-plugin-import": "^2.16.0",
+    "eslint-plugin-node": "^8.0.1",
+    "eslint-plugin-promise": "^4.0.1",
+    "eslint-plugin-standard": "^4.0.0",
+    "localstorage-memory": "^1.0.2",
+    "mocha": "^5.2.0",
+    "murmurhash3js": "^3.0.1",
+    "request": "^2.88.0"
+  },
+  "optionalDependencies": {}
+}
