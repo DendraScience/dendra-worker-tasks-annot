@@ -1,6 +1,6 @@
 "use strict";
 
 module.exports = {
-  assembleDatapointsConfig: require('./assembleDatapointsConfig'),
+  // assembleDatapointsConfig: require('./assembleDatapointsConfig'),
   processAnnotation: require('./processAnnotation')
 };

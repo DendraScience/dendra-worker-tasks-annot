@@ -24,8 +24,12 @@
     "node": ">=10.15.1"
   },
   "dependencies": {
+    "@feathersjs/authentication-client": "^1.0.11",
+    "localstorage-memory": "^1.0.3",
     "lodash": "^4.17.11",
+    "luxon": "^1.11.3",
     "moment": "^2.24.0",
+    "murmurhash3js": "^3.0.1",
     "node-nats-streaming": "0.0.51"
   },
   "devDependencies": {
@@ -33,7 +37,6 @@
     "@babel/core": "^7.2.2",
     "@babel/preset-env": "^7.3.1",
     "@dendra-science/task-machine": "0.1.2",
-    "@feathersjs/authentication-client": "^1.0.2",
     "@feathersjs/feathers": "^3.3.1",
     "@feathersjs/rest-client": "^1.4.7",
     "chai": "^4.2.0",
@@ -43,9 +46,7 @@
     "eslint-plugin-node": "^8.0.1",
     "eslint-plugin-promise": "^4.0.1",
     "eslint-plugin-standard": "^4.0.0",
-    "localstorage-memory": "^1.0.2",
     "mocha": "^5.2.0",
-    "murmurhash3js": "^3.0.1",
     "request": "^2.88.0"
   },
   "optionalDependencies": {}

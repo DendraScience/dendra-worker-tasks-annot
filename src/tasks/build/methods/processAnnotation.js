@@ -3,15 +3,70 @@
  */
 
 const pick = require('lodash/pick')
+const { getAuthUser } = require('../../../lib/helpers')
+
+const SPEC_DEFAULTS = {
+  annotation: {},
+  annotation_before: {}
+}
 
 async function processAnnotation (req, ctx) {
   // TODO: Add more logging
-  // const { logger } = ctx
-  // const spec = Object.assign({}, SPEC_DEFAULTS, req.spec)
+  const {
+    datastreamService,
+    logger,
+    skipMatching
+  } = ctx
+  const spec = Object.assign({}, SPEC_DEFAULTS, req.spec)
+  const {
+    annotation,
+    annotation_before: annotationBefore
+  } = spec
 
-  // TODO: Finish this!
+  /*
+    Skip this request?
+   */
 
-  return {}
+  if (skipMatching(annotation.title) || skipMatching(annotationBefore.description)) {
+    logger.warn('Skipping request', { _id: req._id })
+    return {}
+  }
+
+  /*
+    Authenticate and/or verify user credentials.
+   */
+
+  await getAuthUser(ctx)
+
+  /*
+    Touch datastreams that need their datapoints configuration built.
+   */
+
+  // TODO: Only do this if specific actions are referenced
+
+  let datastreamIds = []
+  let stationIds = []
+
+  if (annotation.datastream_ids) datastreamIds.push(...annotation.datastream_ids)
+  if (annotation.station_ids) stationIds.push(...annotation.station_ids)
+  if (annotationBefore.datastream_ids) datastreamIds.push(...annotationBefore.datastream_ids)
+  if (annotationBefore.station_ids) stationIds.push(...annotationBefore.station_ids)
+
+  datastreamIds = [...new Set(datastreamIds)]
+  stationIds = [...new Set(stationIds)]
+
+  const query = {
+    source_type: 'sensor',
+    $or: [{
+      _id: { $in: datastreamIds }
+    }, {
+      station_id: { $in: stationIds }
+    }]
+  }
+
+  logger.info('Patching datastreams', { datastreamIds, stationIds, query })
+
+  return datastreamService.patch(null, {}, { query })
 }
 
 module.exports = async (...args) => {

@@ -69,22 +69,31 @@ function handleMessage(msg) {
 
 module.exports = {
   guard(m) {
-    return !m.subscriptionsError && m.private.stan && m.stanConnected && m.subscriptionsTs !== m.versionTs && !m.private.subscriptions;
+    return !m.subscriptionsError && m.private.webConnection && m.private.stan && m.stanConnected && m.subscriptionsTs !== m.versionTs && !m.private.subscriptions;
   },
 
   execute(m, {
     logger
   }) {
     const {
-      stan
+      stan,
+      webConnection
     } = m.private;
-    const annotationService = m.$app.get('connections').web.app.service('/annotations');
-    const datastreamService = m.$app.get('connections').web.app.service('/datastreams');
+    const {
+      authenticate
+    } = webConnection;
+    const {
+      passport
+    } = webConnection.app;
+    const annotationService = webConnection.app.service('/annotations');
+    const datastreamService = webConnection.app.service('/datastreams');
+    const userService = webConnection.app.service('/users');
     const subs = [];
     m.sourceKeys.forEach(sourceKey => {
       const source = m.sources[sourceKey];
       const {
         queue_group: queueGroup,
+        skip_matching_expr: skipMatchingExpr,
         sub_options: subOptions,
         sub_to_subject: subSubject
       } = source;
@@ -103,11 +112,15 @@ module.exports = {
         const sub = typeof queueGroup === 'string' ? stan.subscribe(subSubject, queueGroup, opts) : stan.subscribe(subSubject, opts);
         sub.on('message', handleMessage.bind({
           annotationService,
+          authenticate,
           datastreamService,
           logger,
           m,
+          passport,
+          skipMatching: typeof skipMatchingExpr === 'string' ? new RegExp(skipMatchingExpr).test : () => false,
           stan,
-          subSubject
+          subSubject,
+          userService
         }));
         subs.push(sub);
       } catch (err) {

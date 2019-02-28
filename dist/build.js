@@ -6,5 +6,6 @@ module.exports = {
   stanCheck: require('./tasks/stanCheck'),
   stanClose: require('./tasks/stanClose'),
   subscriptions: require('./tasks/build/subscriptions'),
-  versionTs: require('./tasks/versionTs')
+  versionTs: require('./tasks/versionTs'),
+  webConnection: require('./tasks/webConnection')
 };

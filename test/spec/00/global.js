@@ -11,16 +11,20 @@ tm.configure({
 
 app.logger = console
 
-const WEB_API_URL = 'http://preview.api.dendra.science/v1'
+const WEB_API_URL = 'http://api.preview.dendra.science/v1'
 
 app.set('connections', {
   web: {
+    // The Feathers app created by the worker service
     app: feathers().configure(restClient(WEB_API_URL).request(request)),
-    authenticate: {
-      email: '',
-      password: '',
+
+    // Used to create a task-level Feathers app with authentication
+    auth: {
+      email: process.env.WEB_API_AUTH_EMAIL,
+      password: process.env.WEB_API_AUTH_PASS,
       strategy: 'local'
-    }
+    },
+    url: WEB_API_URL
   }
 })
 
