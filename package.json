@@ -28,7 +28,6 @@
     "localstorage-memory": "^1.0.3",
     "lodash": "^4.17.11",
     "luxon": "^1.11.3",
-    "moment": "^2.24.0",
     "murmurhash3js": "^3.0.1",
     "node-nats-streaming": "0.0.51"
   },

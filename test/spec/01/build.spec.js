@@ -9,6 +9,38 @@ const restClient = require('@feathersjs/rest-client')
 const request = require('request')
 const murmurHash3 = require('murmurhash3js')
 
+/*
+
+  The following diagram represents this test case.
+
+  NOTES:
+    #1...#5 are annotations with intervals as shown.
+    a...i represent points in time, e.g. begins_at.
+    Legacy and Influx are two existing config instances.
+    Processing should yield config instances [0]...[7].
+
+     |
+     |  +--------+- a -+--------+
+  #1 |  |        |     |   #1   | [0]
+     +- |        |- b -+--------+
+        |        |     |        | [1]
+     +- | Legacy |- c -+--------+
+  #2 |  |        |     |   #2   | [2]
+     +- |        |- d -+--------+
+     |  |        |     |   #3   | [3]
+  #3 |  +--------+- e -+--------+
+     |  |        |     |   #3   | [4]
+     +- |        |- f -+--------+
+  #4 |  |        |     |   #4   | [5]
+     +- |        |- g -+--------+
+        | Influx |     |        | [6]
+     +- |        |- h -+--------+
+  #5 |  |        |     |   #5   | [7]
+     |  |        |- i -+--------+
+     |  |        |
+
+ */
+
 describe('build tasks', function () {
   this.timeout(60000)
 
@@ -41,6 +73,17 @@ describe('build tasks', function () {
   const testName = 'dendra-worker-tasks-annot UNIT_TEST'
 
   const id = {}
+  const date = {
+    a: '2013-05-07T23:10:00.000Z',
+    b: '2013-05-08T00:10:00.000Z',
+    c: '2018-05-09T17:10:00.000Z',
+    d: '2018-05-09T18:10:00.000Z',
+    e: '2018-05-09T19:10:00.000Z',
+    f: '2018-05-09T20:10:00.000Z',
+    g: '2018-05-09T21:10:00.000Z',
+    h: '2018-05-10T21:10:00.000Z',
+    i: '2200-02-02T00:00:00.000Z'
+  }
   const webConnection = {}
 
   const authWebConnection = async () => {
@@ -63,6 +106,9 @@ describe('build tasks', function () {
     }
   }
   const cleanup = async () => {
+    await removeDocuments('/annotations', {
+      description: testName
+    })
     await removeDocuments('/datastreams', {
       description: testName
     })
@@ -116,12 +162,76 @@ describe('build tasks', function () {
       utc_offset: -28800
     }))._id
 
-    id.datastream = (await webConnection.app.service('/datastreams').create({
+    id.annotation1 = (await webConnection.app.service('/annotations').create({
+      actions: [{
+        exclude: true
+      }],
+      // begins_at: '',
+      ends_before: date.b,
+      description: testName,
       enabled: true,
-      name: `${testName} ${skipText}`,
+      organization_id: id.org,
+      station_ids: [id.station],
+      title: `${testName} ${skipText} #1`
+    }))._id
+
+    id.annotation2 = (await webConnection.app.service('/annotations').create({
+      actions: [{
+        exclude: true
+      }],
+      begins_at: date.c,
+      ends_before: date.d,
+      description: testName,
+      enabled: true,
+      organization_id: id.org,
+      station_ids: [id.station],
+      title: `${testName} ${skipText} #2`
+    }))._id
+
+    id.annotation3 = (await webConnection.app.service('/annotations').create({
+      actions: [{
+        exclude: true
+      }],
+      begins_at: date.d,
+      ends_before: date.f,
+      description: testName,
+      enabled: true,
+      organization_id: id.org,
+      station_ids: [id.station],
+      title: `${testName} ${skipText} #3`
+    }))._id
+
+    id.annotation4 = (await webConnection.app.service('/annotations').create({
+      actions: [{
+        exclude: true
+      }],
+      begins_at: date.f,
+      ends_before: date.g,
+      description: testName,
+      enabled: true,
+      organization_id: id.org,
+      station_ids: [id.station],
+      title: `${testName} ${skipText} #4`
+    }))._id
+
+    id.annotation5 = (await webConnection.app.service('/annotations').create({
+      actions: [{
+        exclude: true
+      }],
+      begins_at: date.h,
+      // ends_before: '',
+      description: testName,
+      enabled: true,
+      organization_id: id.org,
+      station_ids: [id.station],
+      title: `${testName} ${skipText} #5`
+    }))._id
+
+    id.datastream = (await webConnection.app.service('/datastreams').create({
       datapoints_config: [
         {
-          begins_at: '2013-05-07T23:10:00.000Z',
+          begins_at: date.a,
+          ends_before: date.e,
           params: {
             query: {
               compact: true,
@@ -129,10 +239,11 @@ describe('build tasks', function () {
               time_adjust: -28800
             }
           },
-          path: '/legacy/datavalues-ucnrs',
-          ends_before: '2018-05-09T19:10:00.000Z'
+          path: '/legacy/datavalues-ucnrs'
         },
         {
+          begins_at: date.e,
+          // ends_before: '',
           params: {
             query: {
               api: 'ucnrs',
@@ -143,11 +254,12 @@ describe('build tasks', function () {
               coalesce: false
             }
           },
-          begins_at: '2018-05-09T19:10:00.000Z',
           path: '/influx/select'
         }
       ],
       description: testName,
+      enabled: true,
+      name: `${testName} ${skipText}`,
       organization_id: id.org,
       source_type: 'sensor',
       station_id: id.station
@@ -295,7 +407,7 @@ describe('build tasks', function () {
     })
   })
 
-  it.skip('should process assembleDatapointsConfig request', function () {
+  it('should process assembleDatapointsConfig request', function () {
     const msgStr = JSON.stringify({
       _id: 'assemble-dayapoints-config-1234',
       method: 'assembleDatapointsConfig',
@@ -309,7 +421,93 @@ describe('build tasks', function () {
     })
   })
 
-  it.skip('should wait for 5 seconds', function () {
+  it('should wait for 5 seconds', function () {
     return new Promise(resolve => setTimeout(resolve, 5000))
+  })
+
+  it('should verify datastream patch after assembleDatapointsConfig', function () {
+    return webConnection.app.service('/datastreams').get(id.datastream).then(doc => {
+      expect(doc).to.have.property('_id', datastream._id)
+
+      expect(doc).to.have.nested.property('datapoints_config_built.0.begins_at', date.a)
+      expect(doc).to.have.nested.property('datapoints_config_built.0.ends_before', date.b)
+      expect(doc).to.have.nested.property('datapoints_config_built.0.actions.exclude', true)
+      expect(doc).to.have.nested.property('datapoints_config_built.0.annotation_ids.0', id.annotation1)
+      expect(doc).to.have.nested.property('datapoints_config_built.0.path', '/legacy/datavalues-ucnrs')
+
+      expect(doc).to.have.nested.property('datapoints_config_built.1.begins_at', date.b)
+      expect(doc).to.have.nested.property('datapoints_config_built.1.ends_before', date.c)
+      expect(doc).to.not.have.nested.property('datapoints_config_built.1.actions')
+      expect(doc).to.not.have.nested.property('datapoints_config_built.1.annotation_ids')
+      expect(doc).to.have.nested.property('datapoints_config_built.1.path', '/legacy/datavalues-ucnrs')
+
+      expect(doc).to.have.nested.property('datapoints_config_built.2.begins_at', date.c)
+      expect(doc).to.have.nested.property('datapoints_config_built.2.ends_before', date.d)
+      expect(doc).to.have.nested.property('datapoints_config_built.2.actions.exclude', true)
+      expect(doc).to.have.nested.property('datapoints_config_built.2.annotation_ids.0', id.annotation2)
+      expect(doc).to.have.nested.property('datapoints_config_built.2.path', '/legacy/datavalues-ucnrs')
+
+      expect(doc).to.have.nested.property('datapoints_config_built.3.begins_at', date.d)
+      expect(doc).to.have.nested.property('datapoints_config_built.3.ends_before', date.e)
+      expect(doc).to.have.nested.property('datapoints_config_built.3.actions.exclude', true)
+      expect(doc).to.have.nested.property('datapoints_config_built.3.annotation_ids.0', id.annotation3)
+      expect(doc).to.have.nested.property('datapoints_config_built.3.path', '/legacy/datavalues-ucnrs')
+
+      expect(doc).to.have.nested.property('datapoints_config_built.4.begins_at', date.e)
+      expect(doc).to.have.nested.property('datapoints_config_built.4.ends_before', date.f)
+      expect(doc).to.have.nested.property('datapoints_config_built.4.actions.exclude', true)
+      expect(doc).to.have.nested.property('datapoints_config_built.4.annotation_ids.0', id.annotation3)
+      expect(doc).to.have.nested.property('datapoints_config_built.4.path', '/influx/select')
+
+      expect(doc).to.have.nested.property('datapoints_config_built.5.begins_at', date.f)
+      expect(doc).to.have.nested.property('datapoints_config_built.5.ends_before', date.g)
+      expect(doc).to.have.nested.property('datapoints_config_built.5.actions.exclude', true)
+      expect(doc).to.have.nested.property('datapoints_config_built.5.annotation_ids.0', id.annotation4)
+      expect(doc).to.have.nested.property('datapoints_config_built.5.path', '/influx/select')
+
+      expect(doc).to.have.nested.property('datapoints_config_built.6.begins_at', date.g)
+      expect(doc).to.have.nested.property('datapoints_config_built.6.ends_before', date.h)
+      expect(doc).to.not.have.nested.property('datapoints_config_built.6.actions')
+      expect(doc).to.not.have.nested.property('datapoints_config_built.6.annotation_ids')
+      expect(doc).to.have.nested.property('datapoints_config_built.6.path', '/influx/select')
+
+      expect(doc).to.have.nested.property('datapoints_config_built.7.begins_at', date.h)
+      expect(doc).to.have.nested.property('datapoints_config_built.7.ends_before', date.i)
+      expect(doc).to.have.nested.property('datapoints_config_built.7.actions.exclude', true)
+      expect(doc).to.have.nested.property('datapoints_config_built.7.annotation_ids.0', id.annotation5)
+      expect(doc).to.have.nested.property('datapoints_config_built.7.path', '/influx/select')
+    })
+  })
+
+  it('should NOT find datapoints at start of config', function () {
+    return webConnection.app.service('/datapoints').find({ query: {
+      datastream_id: id.datastream,
+      time: {
+        $gte: '2013-05-07T23:00:00.000Z',
+        $lt: '2013-05-07T23:30:00.000Z'
+      },
+      $limit: 10,
+      $sort: {
+        time: 1
+      }
+    } }).then(res => {
+      expect(res).to.have.property('data').lengthOf(0)
+    })
+  })
+
+  it('should NOT find datapoints at middle of config', function () {
+    return webConnection.app.service('/datapoints').find({ query: {
+      datastream_id: id.datastream,
+      time: {
+        $gte: '2018-05-09T19:00:00.000Z',
+        $lt: '2018-05-09T19:20:00.000Z'
+      },
+      $limit: 10,
+      $sort: {
+        time: 1
+      }
+    } }).then(res => {
+      expect(res).to.have.property('data').lengthOf(0)
+    })
   })
 })

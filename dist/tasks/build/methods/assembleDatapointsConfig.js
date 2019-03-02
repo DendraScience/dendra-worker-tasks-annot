@@ -12,69 +12,211 @@ const {
 const {
   DateTime,
   Interval
-} = require('luxon'); // Reasonable min and max dates to perform low-level querying
-// NOTE: Didn't use min/max integer since db date conversion could choke
-// NOTE: Revised to be within InfluxDB default dates
+} = require('luxon');
 
+const DATE_TIME_OPTS = {
+  zone: 'utc' // Reasonable min and max dates to perform low-level querying
+  // NOTE: Didn't use min/max integer since db date conversion could choke
+  // NOTE: Revised to be within InfluxDB default dates
 
+};
 const MIN_TIME = Date.UTC(1800, 1, 2);
 const MAX_TIME = Date.UTC(2200, 1, 2);
-const DATE_TIME_OPTS = {
-  zone: 'utc'
-};
+const MIN_DATE_TIME = DateTime.fromMillis(MIN_TIME, DATE_TIME_OPTS);
+const MAX_DATE_TIME = DateTime.fromMillis(MAX_TIME, DATE_TIME_OPTS);
 const SPEC_DEFAULTS = {
   datastream: {}
+  /**
+   * Wraps an annotation document. Provides useful accessors and methods.
+   */
+
 };
 
-function sortAndMerge(config) {
+class Annotation {
+  constructor(props) {
+    Object.assign(this, props);
+  }
+
+  get beginsAt() {
+    if (!this._beginsAt) this._beginsAt = fromISO(this.doc.begins_at, MIN_DATE_TIME);
+    return this._beginsAt;
+  }
+
+  get endsBefore() {
+    if (!this._endsBefore) this._endsBefore = fromISO(this.doc.ends_before, MAX_DATE_TIME);
+    return this._endsBefore;
+  }
+
+  get interval() {
+    return Interval.fromDateTimes(this.beginsAt, this.endsBefore);
+  }
+
+  hasActions() {
+    return this.doc.actions && this.doc.actions.length;
+  }
+
+}
+/**
+ * Wraps an config instance document. Provides useful accessors and methods.
+ */
+
+
+class ConfigInstance {
+  constructor(props) {
+    Object.assign(this, {
+      actions: {},
+      annotationIds: []
+    }, props);
+  }
+
+  get beginsAt() {
+    if (!this._beginsAt) this._beginsAt = fromISO(this.doc.begins_at, MIN_DATE_TIME);
+    return this._beginsAt;
+  }
+
+  set beginsAt(value) {
+    this._beginsAt = value;
+  }
+
+  get beginsAtMillis() {
+    return this.beginsAt.toMillis();
+  }
+
+  set beginsAtMillis(value) {
+    this.beginsAt = DateTime.fromMillis(value, DATE_TIME_OPTS);
+  }
+
+  get endsBefore() {
+    if (!this._endsBefore) this._endsBefore = fromISO(this.doc.ends_before, MAX_DATE_TIME);
+    return this._endsBefore;
+  }
+
+  set endsBefore(value) {
+    this._endsBefore = value;
+  }
+
+  get endsBeforeMillis() {
+    return this.endsBefore.toMillis();
+  }
+
+  set endsBeforeMillis(value) {
+    this.endsBefore = DateTime.fromMillis(value, DATE_TIME_OPTS);
+  }
+
+  get interval() {
+    return Interval.fromDateTimes(this.beginsAt, this.endsBefore);
+  }
+
+  set interval(value) {
+    this.beginsAt = value.start;
+    this.endsBefore = value.end;
+  }
+
+  applyActions({
+    doc
+  }) {
+    /*
+      Check for and apply the 'exclude' action.
+     */
+    const excludeAction = doc.actions.find(action => action.exclude === true);
+    if (excludeAction) this.actions.exclude = true; // TODO: Add additional actions here
+    // Append a reference to the annotation
+
+    this.annotationIds.push(doc._id);
+    return this;
+  }
+
+  cloneWithInterval(interval) {
+    return new ConfigInstance({
+      actions: Object.assign({}, this.actions),
+      annotationIds: [...this.annotationIds],
+      doc: this.doc,
+      interval
+    });
+  }
+
+  mergedDoc() {
+    const {
+      actions,
+      annotationIds,
+      doc,
+      interval
+    } = this;
+    const newDoc = Object.assign({}, doc, {
+      begins_at: interval.start.toISO(),
+      ends_before: interval.end.toISO()
+    });
+    if (Object.keys(actions).length) newDoc.actions = actions;
+    if (annotationIds.length) newDoc.annotation_ids = annotationIds;
+    return newDoc;
+  }
+
+}
+
+function applyAnnotationToConfig(annotation, config) {
+  const newConfig = [];
+
+  for (const inst of config) {
+    if (!annotation.interval.overlaps(inst.interval)) {
+      newConfig.push(inst);
+      continue;
+    } // Append non-overlaping instances
+
+
+    inst.interval.difference(annotation.interval).forEach(interval => {
+      newConfig.push(inst.cloneWithInterval(interval));
+    }); // Append intersecting instance
+
+    const intersect = inst.interval.intersection(annotation.interval);
+    if (intersect) newConfig.push(inst.cloneWithInterval(intersect).applyActions(annotation));
+  }
+
+  return newConfig;
+}
+
+function configSortPredicate(a, b) {
+  if (a.beginsAtMillis < b.beginsAtMillis) return -1;
+  if (a.beginsAtMillis > b.beginsAtMillis) return 1;
+  return 0;
+}
+
+function fromISO(iso, invalid) {
+  const dateTime = DateTime.fromISO(iso, DATE_TIME_OPTS);
+  return dateTime.isValid ? dateTime : invalid;
+}
+
+function preprocessConfig(config) {
   const stack = []; // Efficiently merge config instances in a linear traversal
 
-  config.sort((a, b) => {
-    if (a.beginsAt < b.beginsAt) return -1;
-    if (a.beginsAt > b.beginsAt) return 1;
-    return 0;
-  }).forEach(inst => {
-    if (inst.endsBefore <= inst.beginsAt) {// Exclude: inverted interval
+  config.map(doc => new ConfigInstance({
+    doc
+  })).sort(configSortPredicate).forEach(inst => {
+    if (inst.endsBeforeMillis <= inst.beginsAtMillis) {// Exclude: inverted interval
     } else if (stack.length === 0) {
       stack.push(inst); // Init stack
     } else {
       const top = stack[stack.length - 1];
 
-      if (inst.beginsAt >= top.endsBefore) {
+      if (inst.beginsAtMillis >= top.endsBeforeMillis) {
         stack.push(inst);
-      } else if (inst.endsBefore <= top.endsBefore) {// Exclude: instance interval is within top interval
-      } else if (inst.beginsAt === top.beginsAt) {
+      } else if (inst.endsBeforeMillis <= top.endsBeforeMillis) {// Exclude: instance interval is within top interval
+      } else if (inst.beginsAtMillis === top.beginsAtMillis) {
         stack.pop();
         stack.push(inst);
       } else {
-        top.endsBefore = inst.beginsAt;
+        top.endsBeforeMillis = inst.beginsAtMillis;
         stack.push(inst);
       }
     }
   });
   return stack;
-} // function unwrapConfigInstances (config) {
-//   return []
-// }
-
-
-function wrapConfigInstances(config) {
-  return config.map(inst => {
-    const beginsAt = DateTime.fromISO(inst.begins_at, DATE_TIME_OPTS);
-    const endsBefore = DateTime.fromISO(inst.ends_before, DATE_TIME_OPTS);
-    return {
-      beginsAt: beginsAt.isValid ? beginsAt.toMillis() : MIN_TIME,
-      endsBefore: endsBefore.isValid ? endsBefore.toMillis() : MAX_TIME,
-      originalInst: inst
-    };
-  });
 }
 
 async function assembleDatapointsConfig(req, ctx) {
   // TODO: Add more logging
   const {
     annotationService,
-    // datastreamService,
+    datastreamService,
     logger,
     skipMatching
   } = ctx;
@@ -122,47 +264,40 @@ async function assembleDatapointsConfig(req, ctx) {
   const annotRes = await annotationService.find({
     query
   });
+  const annotations = (annotRes.data || []).map(doc => new Annotation({
+    doc
+  }));
+  logger.info(`Found (${annotations.length}) annotation(s)`);
   /*
-    Build a datapoints configuration.
+    Update the datapoints config based on each annotation.
    */
 
-  const annotations = annotRes.data || [];
-  const minDateTime = DateTime.fromMillis(MIN_TIME, DATE_TIME_OPTS);
-  const maxDateTime = DateTime.fromMillis(MAX_TIME, DATE_TIME_OPTS);
-  let config = wrapConfigInstances(datastream.datapoints_config || []);
-  logger.info(`Found (${annotations.length}) annotation(s)`);
+  let config = preprocessConfig(datastream.datapoints_config || []);
 
   for (const annotation of annotations) {
-    let beginsAt = DateTime.fromISO(annotation.begins_at);
-    let endsBefore = DateTime.fromISO(annotation.ends_before);
-    if (!beginsAt.isValid) beginsAt = minDateTime;
-    if (!endsBefore.isValid) endsBefore = maxDateTime;
-    const annotInterval = Interval.fromDateTimes(beginsAt, endsBefore);
-    const stack = [];
-    config = sortAndMerge(config);
-
-    for (const inst of config) {
-      const instInterval = Interval.fromDateTimes(DateTime.fromMillis(inst.beginsAt, DATE_TIME_OPTS), DateTime.fromMillis(inst.endsBefore, DATE_TIME_OPTS));
-
-      if (annotInterval.overlaps(instInterval)) {// Consider exclude flag
-      } else {
-        stack.push(inst);
-      }
+    if (annotation.hasActions()) {
+      config = applyAnnotationToConfig(annotation, config);
+      config = config.sort(configSortPredicate);
     }
-  } // TODO: Post process configs
-  // TODO: Finish this!
-  // TODO: Use a document version (like version_uuid) instead of updated_at!
-  // const query = {
-  //   _id: datastream._id,
-  //   updated_at: datastream.updated_at
-  // }
-  // logger.info('Patching datastream', { query })
-  // return datastreamService.patch(null, {
-  //   datapoints_config_built: configBuilt
-  // }, { query })
+  }
 
+  config = config.map(inst => inst.mergedDoc());
+  /*
+    Patch the datastream with the built config.
+   */
 
-  return {};
+  query = {
+    _id: datastream._id,
+    version_id: datastream.version_id
+  };
+  logger.info('Patching datastream', {
+    query
+  });
+  return datastreamService.patch(null, {
+    datapoints_config_built: config
+  }, {
+    query
+  });
 }
 
 module.exports = async (...args) => {
