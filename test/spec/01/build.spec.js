@@ -166,8 +166,10 @@ describe('build tasks', function () {
       actions: [{
         exclude: true
       }],
-      // begins_at: '',
-      ends_before: date.b,
+      intervals: [{
+        // begins_at: '',
+        ends_before: date.b
+      }],
       description: testName,
       enabled: true,
       organization_id: id.org,
@@ -179,8 +181,10 @@ describe('build tasks', function () {
       actions: [{
         exclude: true
       }],
-      begins_at: date.c,
-      ends_before: date.d,
+      intervals: [{
+        begins_at: date.c,
+        ends_before: date.d
+      }],
       description: testName,
       enabled: true,
       organization_id: id.org,
@@ -192,8 +196,10 @@ describe('build tasks', function () {
       actions: [{
         exclude: true
       }],
-      begins_at: date.d,
-      ends_before: date.f,
+      intervals: [{
+        begins_at: date.d,
+        ends_before: date.f
+      }],
       description: testName,
       enabled: true,
       organization_id: id.org,
@@ -205,8 +211,10 @@ describe('build tasks', function () {
       actions: [{
         exclude: true
       }],
-      begins_at: date.f,
-      ends_before: date.g,
+      intervals: [{
+        begins_at: date.f,
+        ends_before: date.g
+      }],
       description: testName,
       enabled: true,
       organization_id: id.org,
@@ -218,8 +226,10 @@ describe('build tasks', function () {
       actions: [{
         exclude: true
       }],
-      begins_at: date.h,
-      // ends_before: '',
+      intervals: [{
+        begins_at: date.h
+        // ends_before: ''
+      }],
       description: testName,
       enabled: true,
       organization_id: id.org,

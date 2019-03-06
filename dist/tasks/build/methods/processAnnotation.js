@@ -9,6 +9,7 @@ const {
   getAuthUser
 } = require('../../../lib/helpers');
 
+const SKIP_FIELDS = ['title', 'description'];
 const SPEC_DEFAULTS = {
   annotation: {},
   annotation_before: {}
@@ -30,7 +31,7 @@ async function processAnnotation(req, ctx) {
     Skip this request?
    */
 
-  if (skipMatching(annotation.title) || skipMatching(annotationBefore.description)) {
+  if (skipMatching(annotation, SKIP_FIELDS) || skipMatching(annotationBefore, SKIP_FIELDS)) {
     logger.warn('Skipping request', {
       _id: req._id
     });

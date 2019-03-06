@@ -24,6 +24,7 @@ const MIN_TIME = Date.UTC(1800, 1, 2);
 const MAX_TIME = Date.UTC(2200, 1, 2);
 const MIN_DATE_TIME = DateTime.fromMillis(MIN_TIME, DATE_TIME_OPTS);
 const MAX_DATE_TIME = DateTime.fromMillis(MAX_TIME, DATE_TIME_OPTS);
+const SKIP_FIELDS = ['name', 'description'];
 const SPEC_DEFAULTS = {
   datastream: {}
   /**
@@ -38,12 +39,12 @@ class Annotation {
   }
 
   get beginsAt() {
-    if (!this._beginsAt) this._beginsAt = fromISO(this.doc.begins_at, MIN_DATE_TIME);
+    if (!this._beginsAt) this._beginsAt = fromISO(this.intervalDoc.begins_at, MIN_DATE_TIME);
     return this._beginsAt;
   }
 
   get endsBefore() {
-    if (!this._endsBefore) this._endsBefore = fromISO(this.doc.ends_before, MAX_DATE_TIME);
+    if (!this._endsBefore) this._endsBefore = fromISO(this.intervalDoc.ends_before, MAX_DATE_TIME);
     return this._endsBefore;
   }
 
@@ -228,7 +229,7 @@ async function assembleDatapointsConfig(req, ctx) {
     Skip this request?
    */
 
-  if (skipMatching(datastream.name) || skipMatching(datastream.description)) {
+  if (skipMatching(datastream, SKIP_FIELDS)) {
     logger.warn('Skipping request', {
       _id: req._id
     });
@@ -264,10 +265,16 @@ async function assembleDatapointsConfig(req, ctx) {
   const annotRes = await annotationService.find({
     query
   });
-  const annotations = (annotRes.data || []).map(doc => new Annotation({
-    doc
-  }));
-  logger.info(`Found (${annotations.length}) annotation(s)`);
+  const annotations = (annotRes.data || []).map(doc => {
+    return doc.intervals ? doc.intervals.map(intervalDoc => new Annotation({
+      doc,
+      intervalDoc
+    })) : [new Annotation({
+      doc,
+      intervalDoc: {}
+    })];
+  }).reduce((acc, current) => acc.concat(current), []);
+  logger.info(`Processing (${annotations.length}) annotation intervals`);
   /*
     Update the datapoints config based on each annotation.
    */

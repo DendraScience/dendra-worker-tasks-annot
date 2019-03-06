@@ -110,6 +110,12 @@ module.exports = {
         }
 
         const sub = typeof queueGroup === 'string' ? stan.subscribe(subSubject, queueGroup, opts) : stan.subscribe(subSubject, opts);
+        const skipMatchingRegExp = typeof skipMatchingExpr === 'string' ? new RegExp(skipMatchingExpr) : undefined;
+
+        const skipMatching = (data, names) => {
+          return skipMatchingRegExp ? names.some(name => data && data[name] && skipMatchingRegExp.test(data[name])) : false;
+        };
+
         sub.on('message', handleMessage.bind({
           annotationService,
           authenticate,
@@ -117,7 +123,7 @@ module.exports = {
           logger,
           m,
           passport,
-          skipMatching: typeof skipMatchingExpr === 'string' ? new RegExp(skipMatchingExpr).test : () => false,
+          skipMatching,
           stan,
           subSubject,
           userService
