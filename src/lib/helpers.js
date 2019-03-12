@@ -7,9 +7,8 @@ async function getAuthUser ({ authenticate, logger, passport, userService }) {
   let user
 
   if (accessToken) {
-    const payload = await passport.verifyJWT(accessToken)
-
     try {
+      const payload = await passport.verifyJWT(accessToken)
       user = await userService.get(payload.userId)
     } catch (err) {
       logger.error('Get user error', { err })
