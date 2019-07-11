@@ -104,11 +104,30 @@ class ConfigInstance {
 
   applyActions ({ doc }) {
     /*
+      Check for and apply the 'evaluate' actions.
+     */
+
+    const evaluateActions = doc.actions.filter(action => action.evaluate)
+    if (evaluateActions.length) {
+      this.actions.evaluate = evaluateActions.map(action => action.evaluate).join(';')
+    }
+
+    /*
       Check for and apply the 'exclude' action.
      */
 
     const excludeAction = doc.actions.find(action => action.exclude === true)
     if (excludeAction) this.actions.exclude = true
+
+    /*
+      Check for and apply the 'flag' actions.
+     */
+
+    const flagActions = doc.actions.filter(action => Array.isArray(action.flag))
+    if (flagActions.length) {
+      this.actions.flag = []
+      flagActions.forEach(action => this.actions.flag.push(...action.flag))
+    }
 
     // TODO: Add additional actions here
 

@@ -71,6 +71,7 @@ describe('build tasks', function () {
   const requestSubject = 'dendra.annotationBuild.v1.req'
   const skipText = 'DENDRA_SKIP_ANNOT_BUILD'
   const testName = 'dendra-worker-tasks-annot UNIT_TEST'
+  const evaluate = 'v = v * 10'
 
   const id = {}
   const date = {
@@ -194,7 +195,13 @@ describe('build tasks', function () {
 
     id.annotation3 = (await webConnection.app.service('/annotations').create({
       actions: [{
+        evaluate
+      }, {
+        evaluate
+      }, {
         exclude: true
+      }, {
+        flag: ['X', 'Y']
       }],
       intervals: [{
         begins_at: date.d,
@@ -441,7 +448,9 @@ describe('build tasks', function () {
 
       expect(doc).to.have.nested.property('datapoints_config_built.0.begins_at', date.a)
       expect(doc).to.have.nested.property('datapoints_config_built.0.ends_before', date.b)
+      expect(doc).to.not.have.nested.property('datapoints_config_built.0.actions.evaluate')
       expect(doc).to.have.nested.property('datapoints_config_built.0.actions.exclude', true)
+      expect(doc).to.not.have.nested.property('datapoints_config_built.0.actions.flag')
       expect(doc).to.have.nested.property('datapoints_config_built.0.annotation_ids.0', id.annotation1)
       expect(doc).to.have.nested.property('datapoints_config_built.0.path', '/legacy/datavalues-ucnrs')
 
@@ -453,25 +462,35 @@ describe('build tasks', function () {
 
       expect(doc).to.have.nested.property('datapoints_config_built.2.begins_at', date.c)
       expect(doc).to.have.nested.property('datapoints_config_built.2.ends_before', date.d)
+      expect(doc).to.not.have.nested.property('datapoints_config_built.2.actions.evaluate')
       expect(doc).to.have.nested.property('datapoints_config_built.2.actions.exclude', true)
+      expect(doc).to.not.have.nested.property('datapoints_config_built.2.actions.flag')
       expect(doc).to.have.nested.property('datapoints_config_built.2.annotation_ids.0', id.annotation2)
       expect(doc).to.have.nested.property('datapoints_config_built.2.path', '/legacy/datavalues-ucnrs')
 
       expect(doc).to.have.nested.property('datapoints_config_built.3.begins_at', date.d)
       expect(doc).to.have.nested.property('datapoints_config_built.3.ends_before', date.e)
+      expect(doc).to.have.nested.property('datapoints_config_built.3.actions.evaluate', `${evaluate};${evaluate}`)
       expect(doc).to.have.nested.property('datapoints_config_built.3.actions.exclude', true)
+      expect(doc).to.have.nested.property('datapoints_config_built.3.actions.flag.0', 'X')
+      expect(doc).to.have.nested.property('datapoints_config_built.3.actions.flag.1', 'Y')
       expect(doc).to.have.nested.property('datapoints_config_built.3.annotation_ids.0', id.annotation3)
       expect(doc).to.have.nested.property('datapoints_config_built.3.path', '/legacy/datavalues-ucnrs')
 
       expect(doc).to.have.nested.property('datapoints_config_built.4.begins_at', date.e)
       expect(doc).to.have.nested.property('datapoints_config_built.4.ends_before', date.f)
+      expect(doc).to.have.nested.property('datapoints_config_built.4.actions.evaluate', `${evaluate};${evaluate}`)
       expect(doc).to.have.nested.property('datapoints_config_built.4.actions.exclude', true)
+      expect(doc).to.have.nested.property('datapoints_config_built.4.actions.flag.0', 'X')
+      expect(doc).to.have.nested.property('datapoints_config_built.4.actions.flag.1', 'Y')
       expect(doc).to.have.nested.property('datapoints_config_built.4.annotation_ids.0', id.annotation3)
       expect(doc).to.have.nested.property('datapoints_config_built.4.path', '/influx/select')
 
       expect(doc).to.have.nested.property('datapoints_config_built.5.begins_at', date.f)
       expect(doc).to.have.nested.property('datapoints_config_built.5.ends_before', date.g)
+      expect(doc).to.not.have.nested.property('datapoints_config_built.5.actions.evaluate')
       expect(doc).to.have.nested.property('datapoints_config_built.5.actions.exclude', true)
+      expect(doc).to.not.have.nested.property('datapoints_config_built.5.actions.flag')
       expect(doc).to.have.nested.property('datapoints_config_built.5.annotation_ids.0', id.annotation4)
       expect(doc).to.have.nested.property('datapoints_config_built.5.path', '/influx/select')
 
@@ -483,7 +502,9 @@ describe('build tasks', function () {
 
       expect(doc).to.have.nested.property('datapoints_config_built.7.begins_at', date.h)
       expect(doc).to.have.nested.property('datapoints_config_built.7.ends_before', date.i)
+      expect(doc).to.not.have.nested.property('datapoints_config_built.7.actions.evaluate')
       expect(doc).to.have.nested.property('datapoints_config_built.7.actions.exclude', true)
+      expect(doc).to.not.have.nested.property('datapoints_config_built.7.actions.flag')
       expect(doc).to.have.nested.property('datapoints_config_built.7.annotation_ids.0', id.annotation5)
       expect(doc).to.have.nested.property('datapoints_config_built.7.path', '/influx/select')
     })
