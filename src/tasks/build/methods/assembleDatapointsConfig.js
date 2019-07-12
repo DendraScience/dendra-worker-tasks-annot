@@ -2,6 +2,7 @@
  * Method to assemble a datastream's datapoints configuration.
  */
 
+const cloneDeep = require('lodash/cloneDeep')
 const pick = require('lodash/pick')
 const { getAuthUser } = require('../../../lib/helpers')
 const { DateTime, Interval } = require('luxon')
@@ -103,13 +104,16 @@ class ConfigInstance {
   }
 
   applyActions ({ doc }) {
+    const { actions } = this
+
     /*
       Check for and apply the 'evaluate' actions.
      */
 
     const evaluateActions = doc.actions.filter(action => action.evaluate)
     if (evaluateActions.length) {
-      this.actions.evaluate = evaluateActions.map(action => action.evaluate).join(';')
+      const expr = evaluateActions.map(action => action.evaluate).join(';')
+      actions.evaluate = actions.evaluate ? `${actions.evaluate};${expr}` : expr
     }
 
     /*
@@ -117,7 +121,7 @@ class ConfigInstance {
      */
 
     const excludeAction = doc.actions.find(action => action.exclude === true)
-    if (excludeAction) this.actions.exclude = true
+    if (excludeAction) actions.exclude = true
 
     /*
       Check for and apply the 'flag' actions.
@@ -125,8 +129,8 @@ class ConfigInstance {
 
     const flagActions = doc.actions.filter(action => Array.isArray(action.flag))
     if (flagActions.length) {
-      this.actions.flag = []
-      flagActions.forEach(action => this.actions.flag.push(...action.flag))
+      const flag = flagActions.reduce((acc, action) => acc.concat(action.flag), [])
+      actions.flag = actions.flag ? actions.flag.concat(flag) : flag
     }
 
     // TODO: Add additional actions here
@@ -139,8 +143,8 @@ class ConfigInstance {
 
   cloneWithInterval (interval) {
     return new ConfigInstance({
-      actions: Object.assign({}, this.actions),
-      annotationIds: [...this.annotationIds],
+      actions: cloneDeep(this.actions),
+      annotationIds: cloneDeep(this.annotationIds),
       doc: this.doc,
       interval
     })
