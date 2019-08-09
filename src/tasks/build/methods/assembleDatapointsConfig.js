@@ -263,7 +263,7 @@ async function assembleDatapointsConfig (req, ctx) {
    */
 
   let query = {
-    enabled: true,
+    is_enabled: true,
     state: 'approved',
     $or: [{
       station_ids: datastream.station_id
