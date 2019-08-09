@@ -89,7 +89,9 @@ async function processAnnotation(req, ctx) {
       _id: item._id
     });
     await datastreamService.patch(item._id, {
-      source_type: 'sensor'
+      $set: {
+        source_type: 'sensor'
+      }
     }); // Trigger rebuild
   }
 

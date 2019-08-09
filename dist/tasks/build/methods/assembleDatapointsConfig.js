@@ -330,7 +330,9 @@ async function assembleDatapointsConfig(req, ctx) {
     query
   });
   return datastreamService.patch(datastream._id, {
-    datapoints_config_built: config
+    $set: {
+      datapoints_config_built: config
+    }
   }, {
     query
   });

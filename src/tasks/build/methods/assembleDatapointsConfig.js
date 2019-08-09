@@ -313,7 +313,7 @@ async function assembleDatapointsConfig (req, ctx) {
   logger.info('Patching datastream', { _id: datastream._id, query })
 
   return datastreamService.patch(datastream._id, {
-    datapoints_config_built: config
+    $set: { datapoints_config_built: config }
   }, { query })
 }
 

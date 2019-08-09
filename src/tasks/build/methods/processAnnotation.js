@@ -78,7 +78,10 @@ async function processAnnotation (req, ctx) {
   const datastreamRes = await datastreamService.find({ query })
   for (const item of (datastreamRes.data || [])) {
     logger.info('Patching datastream', { _id: item._id })
-    await datastreamService.patch(item._id, { source_type: 'sensor' }) // Trigger rebuild
+
+    await datastreamService.patch(item._id, { $set: {
+      source_type: 'sensor'
+    } }) // Trigger rebuild
   }
 
   return datastreamRes
