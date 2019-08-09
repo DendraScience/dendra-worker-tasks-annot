@@ -65,12 +65,23 @@ async function processAnnotation (req, ctx) {
       _id: { $in: datastreamIds }
     }, {
       station_id: { $in: stationIds }
-    }]
+    }],
+    $limit: 2000, // FIX: Implement unbounded find or pagination
+    $select: ['_id'],
+    $sort: {
+      _id: 1 // ASC
+    }
   }
 
-  logger.info('Patching datastreams', { datastreamIds, stationIds, query })
+  logger.info('Patching multiple datastreams', { datastreamIds, stationIds, query })
 
-  return datastreamService.patch(null, {}, { query })
+  const datastreamRes = await datastreamService.find({ query })
+  for (const item of (datastreamRes.data || [])) {
+    logger.info('Patching datastream', { _id: item._id })
+    await datastreamService.patch(item._id, { source_type: 'sensor' }) // Trigger rebuild
+  }
+
+  return datastreamRes
 }
 
 module.exports = async (...args) => {

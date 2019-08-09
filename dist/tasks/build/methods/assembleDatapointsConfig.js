@@ -323,13 +323,13 @@ async function assembleDatapointsConfig(req, ctx) {
    */
 
   query = {
-    _id: datastream._id,
     version_id: datastream.version_id
   };
   logger.info('Patching datastream', {
+    _id: datastream._id,
     query
   });
-  return datastreamService.patch(null, {
+  return datastreamService.patch(datastream._id, {
     datapoints_config_built: config
   }, {
     query
