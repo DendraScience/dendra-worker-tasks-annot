@@ -56,35 +56,43 @@ async function processAnnotation (req, ctx) {
   if (annotationBefore.datastream_ids) datastreamIds.push(...annotationBefore.datastream_ids)
   if (annotationBefore.station_ids) stationIds.push(...annotationBefore.station_ids)
 
-  datastreamIds = [...new Set(datastreamIds)]
   stationIds = [...new Set(stationIds)]
 
-  const query = {
-    source_type: 'sensor',
-    $or: [{
-      _id: { $in: datastreamIds }
-    }, {
-      station_id: { $in: stationIds }
-    }],
-    $limit: 2000, // FIX: Implement unbounded find or pagination
-    $select: ['_id'],
-    $sort: {
-      _id: 1 // ASC
+  logger.info('Finding datastreams for stations', { stationIds })
+
+  // Get the datastreams for each station and add them to the list
+  for (const stationId of stationIds) {
+    const query = {
+      source_type: 'sensor',
+      station_id: stationId,
+      $limit: 2000, // FIX: Implement unbounded find or pagination
+      $select: ['_id'],
+      $sort: {
+        _id: 1 // ASC
+      }
     }
+    const datastreamRes = await datastreamService.find({ query })
+
+    if (datastreamRes.data) datastreamRes.data.forEach(item => datastreamIds.push(item._id))
   }
 
-  logger.info('Patching multiple datastreams', { datastreamIds, stationIds, query })
+  datastreamIds = [...new Set(datastreamIds)]
 
-  const datastreamRes = await datastreamService.find({ query })
-  for (const item of (datastreamRes.data || [])) {
-    logger.info('Patching datastream', { _id: item._id })
+  logger.info('Patching multiple datastreams', { datastreamIds })
 
-    await datastreamService.patch(item._id, { $set: {
+  for (const datastreamId of datastreamIds) {
+    const query = {
       source_type: 'sensor'
-    } }) // Trigger rebuild
+    }
+
+    logger.info('Patching datastream', { _id: datastreamId, query })
+
+    await datastreamService.patch(datastreamId, { $set: {
+      source_type: 'sensor'
+    } }, { query }) // Trigger rebuild
   }
 
-  return datastreamRes
+  return { datastreamIds }
 }
 
 module.exports = async (...args) => {
