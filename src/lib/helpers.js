@@ -2,7 +2,7 @@
  * Method helpers.
  */
 
-async function getAuthUser ({ authenticate, logger, passport, userService }) {
+async function getAuthUser({ authenticate, logger, passport, userService }) {
   let accessToken = await passport.getJWT()
   let user
 

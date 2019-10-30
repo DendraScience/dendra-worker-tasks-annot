@@ -9,7 +9,6 @@ const {
   getAuthUser
 } = require('../../../lib/helpers');
 
-const SKIP_FIELDS = ['title', 'description'];
 const SPEC_DEFAULTS = {
   annotation: {},
   annotation_before: {}
@@ -19,8 +18,7 @@ async function processAnnotation(req, ctx) {
   // TODO: Add more logging
   const {
     datastreamService,
-    logger,
-    skipMatching
+    logger
   } = ctx;
   const spec = Object.assign({}, SPEC_DEFAULTS, req.spec);
   const {
@@ -28,19 +26,8 @@ async function processAnnotation(req, ctx) {
     annotation_before: annotationBefore
   } = spec;
   /*
-    Skip this request?
-   */
-
-  if (skipMatching(annotation, SKIP_FIELDS) || skipMatching(annotationBefore, SKIP_FIELDS)) {
-    logger.warn('Skipping request', {
-      _id: req._id
-    });
-    return {};
-  }
-  /*
     Authenticate and/or verify user credentials.
    */
-
 
   await getAuthUser(ctx);
   /*

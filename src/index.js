@@ -1,13 +1,12 @@
 /**
- * Worker tasks for aggregating data.
+ * Worker tasks for performing annotation side-effects.
  *
  * @author J. Scott Smith
  * @license BSD-2-Clause-FreeBSD
- * @module dendra-worker-tasks-agg
+ * @module dendra-worker-tasks-annot
  */
 
 // Named exports for convenience
 module.exports = {
   build: require('./build')
-  // groom: require('./groom')
 }

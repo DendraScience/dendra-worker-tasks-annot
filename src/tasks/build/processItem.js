@@ -4,9 +4,7 @@
 
 const methods = require('./methods')
 
-async function processItem (
-  { data, dataObj, msgSeq },
-  ctx) {
+async function processItem({ data, dataObj, msgSeq }, ctx) {
   const { logger, subSubject } = ctx
   try {
     /*
@@ -29,7 +27,13 @@ async function processItem (
 
     if (!buildRes) throw new Error('Build result undefined')
 
-    logger.info('Built', { buildRes, msgSeq, subSubject, startedAt, finishedAt })
+    logger.info('Built', {
+      buildRes,
+      msgSeq,
+      subSubject,
+      startedAt,
+      finishedAt
+    })
 
     // TODO: Store build results
   } catch (err) {

@@ -3,6 +3,7 @@
  */
 
 const cloneDeep = require('lodash/cloneDeep')
+const get = require('lodash/get')
 const pick = require('lodash/pick')
 const { getAuthUser } = require('../../../lib/helpers')
 const { DateTime, Interval } = require('luxon')
@@ -19,10 +20,6 @@ const MAX_TIME = Date.UTC(2200, 1, 2)
 const MIN_DATE_TIME = DateTime.fromMillis(MIN_TIME, DATE_TIME_OPTS)
 const MAX_DATE_TIME = DateTime.fromMillis(MAX_TIME, DATE_TIME_OPTS)
 
-const SKIP_FIELDS = [
-  'name',
-  'description'
-]
 const SPEC_DEFAULTS = {
   datastream: {}
 }
@@ -31,25 +28,27 @@ const SPEC_DEFAULTS = {
  * Wraps an annotation document. Provides useful accessors and methods.
  */
 class Annotation {
-  constructor (props) {
+  constructor(props) {
     Object.assign(this, props)
   }
 
-  get beginsAt () {
-    if (!this._beginsAt) this._beginsAt = fromISO(this.intervalDoc.begins_at, MIN_DATE_TIME)
+  get beginsAt() {
+    if (!this._beginsAt)
+      this._beginsAt = fromISO(this.intervalDoc.begins_at, MIN_DATE_TIME)
     return this._beginsAt
   }
 
-  get endsBefore () {
-    if (!this._endsBefore) this._endsBefore = fromISO(this.intervalDoc.ends_before, MAX_DATE_TIME)
+  get endsBefore() {
+    if (!this._endsBefore)
+      this._endsBefore = fromISO(this.intervalDoc.ends_before, MAX_DATE_TIME)
     return this._endsBefore
   }
 
-  get interval () {
+  get interval() {
     return Interval.fromDateTimes(this.beginsAt, this.endsBefore)
   }
 
-  hasActions () {
+  hasActions() {
     return this.doc.actions && this.doc.actions.length
   }
 }
@@ -58,53 +57,69 @@ class Annotation {
  * Wraps an config instance document. Provides useful accessors and methods.
  */
 class ConfigInstance {
-  constructor (props) {
-    Object.assign(this, {
-      actions: {},
-      annotationIds: []
-    }, props)
+  constructor(props) {
+    Object.assign(
+      this,
+      {
+        actions: {},
+        annotationIds: []
+      },
+      props
+    )
   }
 
-  get beginsAt () {
-    if (!this._beginsAt) this._beginsAt = fromISO(this.doc.begins_at, MIN_DATE_TIME)
+  get beginsAt() {
+    if (!this._beginsAt)
+      this._beginsAt = fromISO(this.doc.begins_at, MIN_DATE_TIME)
     return this._beginsAt
   }
-  set beginsAt (value) {
+  set beginsAt(value) {
     this._beginsAt = value
   }
 
-  get beginsAtMillis () {
+  get beginsAtMillis() {
     return this.beginsAt.toMillis()
   }
-  set beginsAtMillis (value) {
+  set beginsAtMillis(value) {
     this.beginsAt = DateTime.fromMillis(value, DATE_TIME_OPTS)
   }
 
-  get endsBefore () {
-    if (!this._endsBefore) this._endsBefore = fromISO(this.doc.ends_before, MAX_DATE_TIME)
+  get endsBefore() {
+    if (!this._endsBefore)
+      this._endsBefore = fromISO(this.doc.ends_before, MAX_DATE_TIME)
     return this._endsBefore
   }
-  set endsBefore (value) {
+  set endsBefore(value) {
     this._endsBefore = value
   }
 
-  get endsBeforeMillis () {
+  get endsBeforeMillis() {
     return this.endsBefore.toMillis()
   }
-  set endsBeforeMillis (value) {
+  set endsBeforeMillis(value) {
     this.endsBefore = DateTime.fromMillis(value, DATE_TIME_OPTS)
   }
 
-  get interval () {
+  get interval() {
     return Interval.fromDateTimes(this.beginsAt, this.endsBefore)
   }
-  set interval (value) {
+  set interval(value) {
     this.beginsAt = value.start
     this.endsBefore = value.end
   }
 
-  applyActions ({ doc }) {
+  applyActions({ doc }) {
     const { actions } = this
+
+    /*
+      Check for and apply the 'attrib' actions.
+     */
+
+    const attribActions = doc.actions.filter(action => action.attrib)
+    if (attribActions.length) {
+      const objs = attribActions.map(action => action.attrib)
+      actions.attrib = Object.assign({}, actions.attrib, ...objs)
+    }
 
     /*
       Check for and apply the 'evaluate' actions.
@@ -129,7 +144,10 @@ class ConfigInstance {
 
     const flagActions = doc.actions.filter(action => Array.isArray(action.flag))
     if (flagActions.length) {
-      const flag = flagActions.reduce((acc, action) => acc.concat(action.flag), [])
+      const flag = flagActions.reduce(
+        (acc, action) => acc.concat(action.flag),
+        []
+      )
       actions.flag = actions.flag ? actions.flag.concat(flag) : flag
     }
 
@@ -141,7 +159,7 @@ class ConfigInstance {
     return this
   }
 
-  cloneWithInterval (interval) {
+  cloneWithInterval(interval) {
     return new ConfigInstance({
       actions: cloneDeep(this.actions),
       annotationIds: cloneDeep(this.annotationIds),
@@ -150,27 +168,36 @@ class ConfigInstance {
     })
   }
 
-  mergedDoc () {
-    const {
-      actions,
-      annotationIds,
-      doc,
-      interval
-    } = this
+  mergedDoc(datastream) {
+    const { actions, annotationIds, doc, interval } = this
 
     const newDoc = Object.assign({}, doc, {
       begins_at: interval.start.toISO(),
       ends_before: interval.end.toISO()
     })
 
-    if (Object.keys(actions).length) newDoc.actions = actions
+    if (Object.keys(actions).length) {
+      // Token replace attributes in evaluate expressions
+      if (actions.evaluate) {
+        const attributes = Object.assign(
+          {},
+          datastream.attributes,
+          actions.attrib
+        )
+        actions.evaluate = actions.evaluate.replace(/@{([.\w]+)}/g, (m, p) =>
+          get(attributes, p, null)
+        )
+      }
+
+      newDoc.actions = actions
+    }
     if (annotationIds.length) newDoc.annotation_ids = annotationIds
 
     return newDoc
   }
 }
 
-function applyAnnotationToConfig (annotation, config) {
+function applyAnnotationToConfig(annotation, config) {
   const newConfig = []
 
   for (const inst of config) {
@@ -186,71 +213,68 @@ function applyAnnotationToConfig (annotation, config) {
 
     // Append intersecting instance
     const intersect = inst.interval.intersection(annotation.interval)
-    if (intersect) newConfig.push(inst.cloneWithInterval(intersect).applyActions(annotation))
+    if (intersect)
+      newConfig.push(inst.cloneWithInterval(intersect).applyActions(annotation))
   }
 
   return newConfig
 }
 
-function configSortPredicate (a, b) {
+function configSortPredicate(a, b) {
   if (a.beginsAtMillis < b.beginsAtMillis) return -1
   if (a.beginsAtMillis > b.beginsAtMillis) return 1
   return 0
 }
 
-function fromISO (iso, invalid) {
+function fromISO(iso, invalid) {
   const dateTime = DateTime.fromISO(iso, DATE_TIME_OPTS)
   return dateTime.isValid ? dateTime : invalid
 }
 
-function preprocessConfig (config) {
+function preprocessConfig(config) {
   const stack = []
 
   // Efficiently merge config instances in a linear traversal
-  config.map(doc => new ConfigInstance({ doc })).sort(configSortPredicate).forEach(inst => {
-    if (inst.endsBeforeMillis <= inst.beginsAtMillis) {
-      // Exclude: inverted interval
-    } else if (stack.length === 0) {
-      stack.push(inst) // Init stack
-    } else {
-      const top = stack[stack.length - 1]
-
-      if (inst.beginsAtMillis >= top.endsBeforeMillis) {
-        stack.push(inst)
-      } else if (inst.endsBeforeMillis <= top.endsBeforeMillis) {
-        // Exclude: instance interval is within top interval
-      } else if (inst.beginsAtMillis === top.beginsAtMillis) {
-        stack.pop()
-        stack.push(inst)
+  config
+    .map(
+      doc =>
+        new ConfigInstance({
+          // Include initial actions, e.g. evaluate
+          actions: Object.assign({}, doc.actions),
+          doc
+        })
+    )
+    .sort(configSortPredicate)
+    .forEach(inst => {
+      if (inst.endsBeforeMillis <= inst.beginsAtMillis) {
+        // Exclude: inverted interval
+      } else if (stack.length === 0) {
+        stack.push(inst) // Init stack
       } else {
-        top.endsBeforeMillis = inst.beginsAtMillis
-        stack.push(inst)
+        const top = stack[stack.length - 1]
+
+        if (inst.beginsAtMillis >= top.endsBeforeMillis) {
+          stack.push(inst)
+        } else if (inst.endsBeforeMillis <= top.endsBeforeMillis) {
+          // Exclude: instance interval is within top interval
+        } else if (inst.beginsAtMillis === top.beginsAtMillis) {
+          stack.pop()
+          stack.push(inst)
+        } else {
+          top.endsBeforeMillis = inst.beginsAtMillis
+          stack.push(inst)
+        }
       }
-    }
-  })
+    })
 
   return stack
 }
 
-async function assembleDatapointsConfig (req, ctx) {
+async function assembleDatapointsConfig(req, ctx) {
   // TODO: Add more logging
-  const {
-    annotationService,
-    datastreamService,
-    logger,
-    skipMatching
-  } = ctx
+  const { annotationService, datastreamService, logger } = ctx
   const spec = Object.assign({}, SPEC_DEFAULTS, req.spec)
   const { datastream } = spec
-
-  /*
-    Skip this request?
-   */
-
-  if (skipMatching(datastream, SKIP_FIELDS)) {
-    logger.warn('Skipping request', { _id: req._id })
-    return {}
-  }
 
   /*
     Authenticate and/or verify user credentials.
@@ -265,11 +289,14 @@ async function assembleDatapointsConfig (req, ctx) {
   let query = {
     is_enabled: true,
     state: 'approved',
-    $or: [{
-      station_ids: datastream.station_id
-    }, {
-      datastream_ids: datastream._id
-    }],
+    $or: [
+      {
+        station_ids: datastream.station_id
+      },
+      {
+        datastream_ids: datastream._id
+      }
+    ],
     $limit: 2000, // FIX: Implement unbounded find or pagination
     $sort: {
       _id: 1 // ASC
@@ -279,11 +306,13 @@ async function assembleDatapointsConfig (req, ctx) {
   logger.info('Finding annotations', { query })
 
   const annotRes = await annotationService.find({ query })
-  const annotations = (annotRes.data || []).map(doc => {
-    return doc.intervals
-      ? doc.intervals.map(intervalDoc => new Annotation({ doc, intervalDoc }))
-      : [new Annotation({ doc, intervalDoc: {} })]
-  }).reduce((acc, current) => acc.concat(current), [])
+  const annotations = (annotRes.data || [])
+    .map(doc => {
+      return doc.intervals
+        ? doc.intervals.map(intervalDoc => new Annotation({ doc, intervalDoc }))
+        : [new Annotation({ doc, intervalDoc: {} })]
+    })
+    .reduce((acc, current) => acc.concat(current), [])
 
   logger.info(`Processing (${annotations.length}) annotation intervals`)
 
@@ -300,7 +329,7 @@ async function assembleDatapointsConfig (req, ctx) {
     }
   }
 
-  config = config.map(inst => inst.mergedDoc())
+  config = config.map(inst => inst.mergedDoc(datastream))
 
   /*
     Patch the datastream with the built config.
@@ -312,9 +341,13 @@ async function assembleDatapointsConfig (req, ctx) {
 
   logger.info('Patching datastream', { _id: datastream._id, query })
 
-  return datastreamService.patch(datastream._id, {
-    $set: { datapoints_config_built: config }
-  }, { query })
+  return datastreamService.patch(
+    datastream._id,
+    {
+      $set: { datapoints_config_built: config }
+    },
+    { query }
+  )
 }
 
 module.exports = async (...args) => {

@@ -6,7 +6,7 @@ const feathers = require('@feathersjs/feathers')
 const auth = require('@feathersjs/authentication-client')
 const localStorage = require('localstorage-memory')
 const restClient = require('@feathersjs/rest-client')
-const request = require('request')
+const axios = require('axios')
 const murmurHash3 = require('murmurhash3js')
 
 /*
@@ -41,10 +41,13 @@ const murmurHash3 = require('murmurhash3js')
 
  */
 
-describe('build tasks', function () {
+describe('build tasks', function() {
   this.timeout(60000)
 
   const now = new Date()
+  const hostname = 'test-hostname-0'
+  const hostParts = hostname.split('-')
+
   const model = {
     props: {},
     state: {
@@ -55,12 +58,13 @@ describe('build tasks', function () {
       sources: [
         {
           description: 'Build annotations based on a method',
-          queue_group: 'dendra.annotationBuild.v1',
+          // NOTE: Deprecated in favor of consistent hashing
+          // queue_group: 'dendra.annotationBuild.v1',
           sub_options: {
             ack_wait: 3600000,
             durable_name: '20181223'
           },
-          sub_to_subject: 'dendra.annotationBuild.v1.req'
+          sub_to_subject: 'dendra.annotationBuild.v1.req.{hostOrdinal}'
         }
       ],
       created_at: now,
@@ -68,10 +72,10 @@ describe('build tasks', function () {
     }
   }
 
-  const requestSubject = 'dendra.annotationBuild.v1.req'
-  const skipText = 'DENDRA_SKIP_ANNOT_BUILD'
+  const requestSubject = 'dendra.annotationBuild.v1.req.0'
   const testName = 'dendra-worker-tasks-annot UNIT_TEST'
-  const evaluate = 'v = v * 10'
+  const evaluate = 'v = v * @{one} * @{obj.ten}'
+  const evaluateRepl = 'v = v * 1 * 10'
 
   const id = {}
   const date = {
@@ -89,13 +93,17 @@ describe('build tasks', function () {
 
   const authWebConnection = async () => {
     const cfg = main.app.get('connections').web
-    const storageKey = webConnection.storageKey = murmurHash3.x86.hash128(`TEST,${cfg.url}`)
-    const app = webConnection.app = feathers()
-      .configure(restClient(cfg.url).request(request))
-      .configure(auth({
-        storage: localStorage,
-        storageKey
-      }))
+    const storageKey = (webConnection.storageKey = murmurHash3.x86.hash128(
+      `TEST,${cfg.url}`
+    ))
+    const app = (webConnection.app = feathers()
+      .configure(restClient(cfg.url).axios(axios))
+      .configure(
+        auth({
+          storage: localStorage,
+          storageKey
+        })
+      ))
 
     await app.authenticate(cfg.auth)
   }
@@ -127,6 +135,18 @@ describe('build tasks', function () {
     writable: false,
     value: main.app
   })
+  Object.defineProperty(model, 'hostname', {
+    enumerable: false,
+    configurable: false,
+    writable: false,
+    value: hostname
+  })
+  Object.defineProperty(model, 'hostOrdinal', {
+    enumerable: false,
+    configurable: false,
+    writable: false,
+    value: hostParts[hostParts.length - 1]
+  })
   Object.defineProperty(model, 'key', {
     enumerable: false,
     configurable: false,
@@ -144,7 +164,7 @@ describe('build tasks', function () {
   let machine
   let datastream
 
-  before(async function () {
+  before(async function() {
     await authWebConnection()
     await cleanup()
 
@@ -153,8 +173,8 @@ describe('build tasks', function () {
     }))._id
 
     id.station = (await webConnection.app.service('/stations').create({
-      enabled: true,
       is_active: true,
+      is_enabled: true,
       is_stationary: true,
       name: testName,
       organization_id: id.org,
@@ -164,87 +184,128 @@ describe('build tasks', function () {
     }))._id
 
     id.annotation1 = (await webConnection.app.service('/annotations').create({
-      actions: [{
-        exclude: true
-      }],
-      intervals: [{
-        // begins_at: '',
-        ends_before: date.b
-      }],
+      actions: [
+        {
+          exclude: true
+        }
+      ],
+      intervals: [
+        {
+          // begins_at: '',
+          ends_before: date.b
+        }
+      ],
       description: testName,
-      enabled: true,
+      is_enabled: true,
       organization_id: id.org,
+      state: 'approved',
       station_ids: [id.station],
-      title: `${testName} ${skipText} #1`
+      title: `${testName} #1`
     }))._id
 
     id.annotation2 = (await webConnection.app.service('/annotations').create({
-      actions: [{
-        exclude: true
-      }],
-      intervals: [{
-        begins_at: date.c,
-        ends_before: date.d
-      }],
+      actions: [
+        {
+          exclude: true
+        }
+      ],
+      intervals: [
+        {
+          begins_at: date.c,
+          ends_before: date.d
+        }
+      ],
       description: testName,
-      enabled: true,
+      is_enabled: true,
       organization_id: id.org,
+      state: 'approved',
       station_ids: [id.station],
-      title: `${testName} ${skipText} #2`
+      title: `${testName} #2`
     }))._id
 
     id.annotation3 = (await webConnection.app.service('/annotations').create({
-      actions: [{
-        evaluate
-      }, {
-        evaluate
-      }, {
-        exclude: true
-      }, {
-        flag: ['X', 'Y']
-      }],
-      intervals: [{
-        begins_at: date.d,
-        ends_before: date.f
-      }],
+      actions: [
+        {
+          attrib: {
+            obj: {
+              ten: 10
+            }
+          }
+        },
+        {
+          evaluate
+        },
+        {
+          evaluate
+        },
+        {
+          exclude: true
+        },
+        {
+          flag: ['X', 'Y']
+        }
+      ],
+      intervals: [
+        {
+          begins_at: date.d,
+          ends_before: date.f
+        }
+      ],
       description: testName,
-      enabled: true,
+      is_enabled: true,
       organization_id: id.org,
+      state: 'approved',
       station_ids: [id.station],
-      title: `${testName} ${skipText} #3`
+      title: `${testName} #3`
     }))._id
 
     id.annotation4 = (await webConnection.app.service('/annotations').create({
-      actions: [{
-        exclude: true
-      }],
-      intervals: [{
-        begins_at: date.f,
-        ends_before: date.g
-      }],
+      actions: [
+        {
+          exclude: true
+        }
+      ],
+      intervals: [
+        {
+          begins_at: date.f,
+          ends_before: date.g
+        }
+      ],
       description: testName,
-      enabled: true,
+      is_enabled: true,
       organization_id: id.org,
+      state: 'approved',
       station_ids: [id.station],
-      title: `${testName} ${skipText} #4`
+      title: `${testName} #4`
     }))._id
 
     id.annotation5 = (await webConnection.app.service('/annotations').create({
-      actions: [{
-        exclude: true
-      }],
-      intervals: [{
-        begins_at: date.h
-        // ends_before: ''
-      }],
+      actions: [
+        {
+          exclude: true
+        }
+      ],
+      intervals: [
+        {
+          begins_at: date.h
+          // ends_before: ''
+        }
+      ],
       description: testName,
-      enabled: true,
+      is_enabled: true,
       organization_id: id.org,
+      state: 'approved',
       station_ids: [id.station],
-      title: `${testName} ${skipText} #5`
+      title: `${testName} #5`
     }))._id
 
     id.datastream = (await webConnection.app.service('/datastreams').create({
+      attributes: {
+        one: 1,
+        obj: {
+          ten: 1
+        }
+      },
       datapoints_config: [
         {
           begins_at: date.a,
@@ -275,34 +336,37 @@ describe('build tasks', function () {
         }
       ],
       description: testName,
-      enabled: true,
-      name: `${testName} ${skipText}`,
+      is_enabled: true,
+      name: testName,
       organization_id: id.org,
       source_type: 'sensor',
-      station_id: id.station
+      station_id: id.station,
+      terms: {}
     }))._id
   })
 
-  after(async function () {
+  after(async function() {
     await cleanup()
 
     await Promise.all([
-      model.private.stan ? new Promise((resolve, reject) => {
-        model.private.stan.removeAllListeners()
-        model.private.stan.once('close', resolve)
-        model.private.stan.once('error', reject)
-        model.private.stan.close()
-      }) : Promise.resolve()
+      model.private.stan
+        ? new Promise((resolve, reject) => {
+            model.private.stan.removeAllListeners()
+            model.private.stan.once('close', resolve)
+            model.private.stan.once('error', reject)
+            model.private.stan.close()
+          })
+        : Promise.resolve()
     ])
   })
 
-  it('should import', function () {
+  it('should import', function() {
     tasks = require('../../../dist').build
 
     expect(tasks).to.have.property('sources')
   })
 
-  it('should create machine', function () {
+  it('should create machine', function() {
     machine = new tm.TaskMachine(model, tasks, {
       helpers: {
         logger: console
@@ -313,78 +377,113 @@ describe('build tasks', function () {
     expect(machine).to.have.property('model')
   })
 
-  it('should run', function () {
+  it('should run', function() {
     model.scratch = {}
 
-    return machine.clear().start().then(success => {
-      /* eslint-disable-next-line no-unused-expressions */
-      expect(success).to.be.true
+    return machine
+      .clear()
+      .start()
+      .then(success => {
+        /* eslint-disable-next-line no-unused-expressions */
+        expect(success).to.be.true
 
-      // Verify task state
-      expect(model).to.have.property('sourcesReady', true)
-      expect(model).to.have.property('stanCheckReady', false)
-      expect(model).to.have.property('stanCloseReady', false)
-      expect(model).to.have.property('stanReady', true)
-      expect(model).to.have.property('subscriptionsReady', true)
-      expect(model).to.have.property('versionTsReady', false)
+        // Verify task state
+        expect(model).to.have.property('sourcesReady', true)
+        expect(model).to.have.property('stanCheckReady', false)
+        expect(model).to.have.property('stanCloseReady', false)
+        expect(model).to.have.property('stanReady', true)
+        expect(model).to.have.property('subscriptionsReady', true)
+        expect(model).to.have.property('versionTsReady', false)
 
-      // Check for defaults
-      expect(model).to.have.nested.property('sources.dendra_annotationBuild_v1_req.some_default', 'default')
-    })
+        // Check for defaults
+        expect(model).to.have.nested.property(
+          'sources.dendra_annotationBuild_v1_req__hostOrdinal_.some_default',
+          'default'
+        )
+      })
   })
 
-  it('should find datapoints at start of config', function () {
-    return webConnection.app.service('/datapoints').find({ query: {
-      datastream_id: id.datastream,
-      time: {
-        $gte: '2013-05-07T23:00:00.000Z',
-        $lt: '2013-05-07T23:30:00.000Z'
-      },
-      $limit: 10,
-      $sort: {
-        time: 1
-      }
-    } }).then(res => {
-      expect(res).to.have.property('data').lengthOf(2).and.deep.include.ordered.members([
-        { t: '2013-05-07T23:10:00.000Z', o: -28800, v: 13.79 },
-        { t: '2013-05-07T23:20:00.000Z', o: -28800, v: 13.86 }
-      ])
-    })
+  it('should find datapoints at start of config', function() {
+    return webConnection.app
+      .service('/datapoints')
+      .find({
+        query: {
+          datastream_id: id.datastream,
+          time: {
+            $gte: '2013-05-07T23:00:00.000Z',
+            $lt: '2013-05-07T23:30:00.000Z'
+          },
+          $limit: 10,
+          $sort: {
+            time: 1
+          }
+        }
+      })
+      .then(res => {
+        expect(res)
+          .to.have.property('data')
+          .lengthOf(2)
+          .and.deep.include.ordered.members([
+            { t: '2013-05-07T23:10:00.000Z', o: -28800, v: 13.79 },
+            { t: '2013-05-07T23:20:00.000Z', o: -28800, v: 13.86 }
+          ])
+      })
   })
 
-  it('should find datapoints at middle of config', function () {
-    return webConnection.app.service('/datapoints').find({ query: {
-      datastream_id: id.datastream,
-      time: {
-        $gte: '2018-05-09T19:00:00.000Z',
-        $lt: '2018-05-09T19:20:00.000Z'
-      },
-      $limit: 10,
-      $sort: {
-        time: 1
-      }
-    } }).then(res => {
-      expect(res).to.have.property('data').lengthOf(2).and.deep.include.ordered.members([
-        { t: '2018-05-09T19:00:00.000Z', o: -28800, v: 17.25 },
-        { t: '2018-05-09T19:10:00.000Z', o: -28800, v: 15.99 }
-      ])
-    })
+  it('should find datapoints at middle of config', function() {
+    return webConnection.app
+      .service('/datapoints')
+      .find({
+        query: {
+          datastream_id: id.datastream,
+          time: {
+            $gte: '2018-05-09T19:00:00.000Z',
+            $lt: '2018-05-09T19:20:00.000Z'
+          },
+          $limit: 10,
+          $sort: {
+            time: 1
+          }
+        }
+      })
+      .then(res => {
+        expect(res)
+          .to.have.property('data')
+          .lengthOf(2)
+          .and.deep.include.ordered.members([
+            { t: '2018-05-09T19:00:00.000Z', o: -28800, v: 17.25 },
+            { t: '2018-05-09T19:10:00.000Z', o: -28800, v: 15.99 }
+          ])
+      })
   })
 
-  it('should touch datastream using version_id', function () {
-    return webConnection.app.service('/datastreams').get(id.datastream).then(doc => {
-      return webConnection.app.service('/datastreams').patch(null, {}, { query: {
-        _id: id.datastream,
-        version_id: doc.version_id
-      } })
-    }).then(res => {
-      expect(res).to.have.nested.property('0._id', id.datastream)
+  it('should touch datastream using version_id', function() {
+    return webConnection.app
+      .service('/datastreams')
+      .get(id.datastream)
+      .then(doc => {
+        return webConnection.app.service('/datastreams').patch(
+          id.datastream,
+          {
+            $set: {
+              source_type: 'sensor'
+            }
+          },
+          {
+            query: {
+              version_id: doc.version_id
+            }
+          }
+        )
+      })
+      .then(res => {
+        expect(res).to.have.nested.property('_id', id.datastream)
 
-      datastream = res[0]
-    })
+        datastream = res
+      })
   })
 
-  it('should process processAnnotation request', function () {
+  it('should process processAnnotation request', function() {
     const msgStr = JSON.stringify({
       _id: 'process-annotation-1234',
       method: 'processAnnotation',
@@ -392,39 +491,45 @@ describe('build tasks', function () {
         annotation: {
           _id: '592f155746a1b867a114e0a0',
           datastream_ids: [id.datastream],
-          enabled: true,
+          is_enabled: true,
           organization_id: id.org,
-          title: `${testName} ${skipText}`
+          title: testName
         },
         annotation_before: {
           _id: '592f155746a1b867a114e0a0',
-          enabled: false,
+          is_enabled: false,
           organization_id: id.org,
           station_ids: [id.station],
-          title: `${testName} ${skipText}`
+          title: testName
         }
       }
     })
 
     return new Promise((resolve, reject) => {
-      model.private.stan.publish(requestSubject, msgStr, (err, guid) => err ? reject(err) : resolve(guid))
+      model.private.stan.publish(requestSubject, msgStr, (err, guid) =>
+        err ? reject(err) : resolve(guid)
+      )
     })
   })
 
-  it('should wait for 5 seconds', function () {
+  it('should wait for 5 seconds', function() {
     return new Promise(resolve => setTimeout(resolve, 5000))
   })
 
-  it('should verify datastream patch after processAnnotation', function () {
-    return webConnection.app.service('/datastreams').get(id.datastream).then(doc => {
-      expect(doc).to.have.property('_id', datastream._id)
-      expect(doc).to.not.have.property('version_id', datastream.version_id)
+  it('should verify datastream patch after processAnnotation', function() {
+    return webConnection.app
+      .service('/datastreams')
+      .get(id.datastream)
+      .then(doc => {
+        expect(doc).to.have.property('_id', datastream._id)
+        expect(doc).to.have.property('version_id')
+        expect(doc).to.not.have.property('version_id', datastream.version_id)
 
-      datastream = doc
-    })
+        datastream = doc
+      })
   })
 
-  it('should process assembleDatapointsConfig request', function () {
+  it('should process assembleDatapointsConfig request', function() {
     const msgStr = JSON.stringify({
       _id: 'assemble-dayapoints-config-1234',
       method: 'assembleDatapointsConfig',
@@ -434,111 +539,300 @@ describe('build tasks', function () {
     })
 
     return new Promise((resolve, reject) => {
-      model.private.stan.publish(requestSubject, msgStr, (err, guid) => err ? reject(err) : resolve(guid))
+      model.private.stan.publish(requestSubject, msgStr, (err, guid) =>
+        err ? reject(err) : resolve(guid)
+      )
     })
   })
 
-  it('should wait for 5 seconds', function () {
+  it('should wait for 5 seconds', function() {
     return new Promise(resolve => setTimeout(resolve, 5000))
   })
 
-  it('should verify datastream patch after assembleDatapointsConfig', function () {
-    return webConnection.app.service('/datastreams').get(id.datastream).then(doc => {
-      expect(doc).to.have.property('_id', datastream._id)
+  it('should verify datastream patch after assembleDatapointsConfig', function() {
+    return webConnection.app
+      .service('/datastreams')
+      .get(id.datastream)
+      .then(doc => {
+        expect(doc).to.have.property('_id', datastream._id)
 
-      expect(doc).to.have.nested.property('datapoints_config_built.0.begins_at', date.a)
-      expect(doc).to.have.nested.property('datapoints_config_built.0.ends_before', date.b)
-      expect(doc).to.not.have.nested.property('datapoints_config_built.0.actions.evaluate')
-      expect(doc).to.have.nested.property('datapoints_config_built.0.actions.exclude', true)
-      expect(doc).to.not.have.nested.property('datapoints_config_built.0.actions.flag')
-      expect(doc).to.have.nested.property('datapoints_config_built.0.annotation_ids.0', id.annotation1)
-      expect(doc).to.have.nested.property('datapoints_config_built.0.path', '/legacy/datavalues-ucnrs')
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.0.begins_at',
+          date.a
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.0.ends_before',
+          date.b
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.0.actions.attrib'
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.0.actions.evaluate'
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.0.actions.exclude',
+          true
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.0.actions.flag'
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.0.annotation_ids.0',
+          id.annotation1
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.0.path',
+          '/legacy/datavalues-ucnrs'
+        )
 
-      expect(doc).to.have.nested.property('datapoints_config_built.1.begins_at', date.b)
-      expect(doc).to.have.nested.property('datapoints_config_built.1.ends_before', date.c)
-      expect(doc).to.not.have.nested.property('datapoints_config_built.1.actions')
-      expect(doc).to.not.have.nested.property('datapoints_config_built.1.annotation_ids')
-      expect(doc).to.have.nested.property('datapoints_config_built.1.path', '/legacy/datavalues-ucnrs')
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.1.begins_at',
+          date.b
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.1.ends_before',
+          date.c
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.1.actions'
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.1.annotation_ids'
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.1.path',
+          '/legacy/datavalues-ucnrs'
+        )
 
-      expect(doc).to.have.nested.property('datapoints_config_built.2.begins_at', date.c)
-      expect(doc).to.have.nested.property('datapoints_config_built.2.ends_before', date.d)
-      expect(doc).to.not.have.nested.property('datapoints_config_built.2.actions.evaluate')
-      expect(doc).to.have.nested.property('datapoints_config_built.2.actions.exclude', true)
-      expect(doc).to.not.have.nested.property('datapoints_config_built.2.actions.flag')
-      expect(doc).to.have.nested.property('datapoints_config_built.2.annotation_ids.0', id.annotation2)
-      expect(doc).to.have.nested.property('datapoints_config_built.2.path', '/legacy/datavalues-ucnrs')
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.2.begins_at',
+          date.c
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.2.ends_before',
+          date.d
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.2.actions.attrib'
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.2.actions.evaluate'
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.2.actions.exclude',
+          true
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.2.actions.flag'
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.2.annotation_ids.0',
+          id.annotation2
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.2.path',
+          '/legacy/datavalues-ucnrs'
+        )
 
-      expect(doc).to.have.nested.property('datapoints_config_built.3.begins_at', date.d)
-      expect(doc).to.have.nested.property('datapoints_config_built.3.ends_before', date.e)
-      expect(doc).to.have.nested.property('datapoints_config_built.3.actions.evaluate', `${evaluate};${evaluate}`)
-      expect(doc).to.have.nested.property('datapoints_config_built.3.actions.exclude', true)
-      expect(doc).to.have.nested.property('datapoints_config_built.3.actions.flag.0', 'X')
-      expect(doc).to.have.nested.property('datapoints_config_built.3.actions.flag.1', 'Y')
-      expect(doc).to.have.nested.property('datapoints_config_built.3.annotation_ids.0', id.annotation3)
-      expect(doc).to.have.nested.property('datapoints_config_built.3.path', '/legacy/datavalues-ucnrs')
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.3.begins_at',
+          date.d
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.3.ends_before',
+          date.e
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.3.actions.attrib.obj.ten',
+          10
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.3.actions.evaluate',
+          `${evaluateRepl};${evaluateRepl}`
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.3.actions.exclude',
+          true
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.3.actions.flag.0',
+          'X'
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.3.actions.flag.1',
+          'Y'
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.3.annotation_ids.0',
+          id.annotation3
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.3.path',
+          '/legacy/datavalues-ucnrs'
+        )
 
-      expect(doc).to.have.nested.property('datapoints_config_built.4.begins_at', date.e)
-      expect(doc).to.have.nested.property('datapoints_config_built.4.ends_before', date.f)
-      expect(doc).to.have.nested.property('datapoints_config_built.4.actions.evaluate', `${evaluate};${evaluate}`)
-      expect(doc).to.have.nested.property('datapoints_config_built.4.actions.exclude', true)
-      expect(doc).to.have.nested.property('datapoints_config_built.4.actions.flag.0', 'X')
-      expect(doc).to.have.nested.property('datapoints_config_built.4.actions.flag.1', 'Y')
-      expect(doc).to.have.nested.property('datapoints_config_built.4.annotation_ids.0', id.annotation3)
-      expect(doc).to.have.nested.property('datapoints_config_built.4.path', '/influx/select')
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.4.begins_at',
+          date.e
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.4.ends_before',
+          date.f
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.4.actions.attrib.obj.ten',
+          10
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.4.actions.evaluate',
+          `${evaluateRepl};${evaluateRepl}`
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.4.actions.exclude',
+          true
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.4.actions.flag.0',
+          'X'
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.4.actions.flag.1',
+          'Y'
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.4.annotation_ids.0',
+          id.annotation3
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.4.path',
+          '/influx/select'
+        )
 
-      expect(doc).to.have.nested.property('datapoints_config_built.5.begins_at', date.f)
-      expect(doc).to.have.nested.property('datapoints_config_built.5.ends_before', date.g)
-      expect(doc).to.not.have.nested.property('datapoints_config_built.5.actions.evaluate')
-      expect(doc).to.have.nested.property('datapoints_config_built.5.actions.exclude', true)
-      expect(doc).to.not.have.nested.property('datapoints_config_built.5.actions.flag')
-      expect(doc).to.have.nested.property('datapoints_config_built.5.annotation_ids.0', id.annotation4)
-      expect(doc).to.have.nested.property('datapoints_config_built.5.path', '/influx/select')
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.5.begins_at',
+          date.f
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.5.ends_before',
+          date.g
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.5.actions.attrib'
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.5.actions.evaluate'
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.5.actions.exclude',
+          true
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.5.actions.flag'
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.5.annotation_ids.0',
+          id.annotation4
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.5.path',
+          '/influx/select'
+        )
 
-      expect(doc).to.have.nested.property('datapoints_config_built.6.begins_at', date.g)
-      expect(doc).to.have.nested.property('datapoints_config_built.6.ends_before', date.h)
-      expect(doc).to.not.have.nested.property('datapoints_config_built.6.actions')
-      expect(doc).to.not.have.nested.property('datapoints_config_built.6.annotation_ids')
-      expect(doc).to.have.nested.property('datapoints_config_built.6.path', '/influx/select')
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.6.begins_at',
+          date.g
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.6.ends_before',
+          date.h
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.6.actions'
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.6.annotation_ids'
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.6.path',
+          '/influx/select'
+        )
 
-      expect(doc).to.have.nested.property('datapoints_config_built.7.begins_at', date.h)
-      expect(doc).to.have.nested.property('datapoints_config_built.7.ends_before', date.i)
-      expect(doc).to.not.have.nested.property('datapoints_config_built.7.actions.evaluate')
-      expect(doc).to.have.nested.property('datapoints_config_built.7.actions.exclude', true)
-      expect(doc).to.not.have.nested.property('datapoints_config_built.7.actions.flag')
-      expect(doc).to.have.nested.property('datapoints_config_built.7.annotation_ids.0', id.annotation5)
-      expect(doc).to.have.nested.property('datapoints_config_built.7.path', '/influx/select')
-    })
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.7.begins_at',
+          date.h
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.7.ends_before',
+          date.i
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.7.actions.attrib'
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.7.actions.evaluate'
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.7.actions.exclude',
+          true
+        )
+        expect(doc).to.not.have.nested.property(
+          'datapoints_config_built.7.actions.flag'
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.7.annotation_ids.0',
+          id.annotation5
+        )
+        expect(doc).to.have.nested.property(
+          'datapoints_config_built.7.path',
+          '/influx/select'
+        )
+      })
   })
 
-  it('should NOT find datapoints at start of config', function () {
-    return webConnection.app.service('/datapoints').find({ query: {
-      datastream_id: id.datastream,
-      time: {
-        $gte: '2013-05-07T23:00:00.000Z',
-        $lt: '2013-05-07T23:30:00.000Z'
-      },
-      $limit: 10,
-      $sort: {
-        time: 1
-      }
-    } }).then(res => {
-      expect(res).to.have.property('data').lengthOf(0)
-    })
+  it('should NOT find datapoints at start of config', function() {
+    return webConnection.app
+      .service('/datapoints')
+      .find({
+        query: {
+          datastream_id: id.datastream,
+          time: {
+            $gte: '2013-05-07T23:00:00.000Z',
+            $lt: '2013-05-07T23:30:00.000Z'
+          },
+          $limit: 10,
+          $sort: {
+            time: 1
+          }
+        }
+      })
+      .then(res => {
+        expect(res)
+          .to.have.property('data')
+          .lengthOf(0)
+      })
   })
 
-  it('should NOT find datapoints at middle of config', function () {
-    return webConnection.app.service('/datapoints').find({ query: {
-      datastream_id: id.datastream,
-      time: {
-        $gte: '2018-05-09T19:00:00.000Z',
-        $lt: '2018-05-09T19:20:00.000Z'
-      },
-      $limit: 10,
-      $sort: {
-        time: 1
-      }
-    } }).then(res => {
-      expect(res).to.have.property('data').lengthOf(0)
-    })
+  it('should NOT find datapoints at middle of config', function() {
+    return webConnection.app
+      .service('/datapoints')
+      .find({
+        query: {
+          datastream_id: id.datastream,
+          time: {
+            $gte: '2018-05-09T19:00:00.000Z',
+            $lt: '2018-05-09T19:20:00.000Z'
+          },
+          $limit: 10,
+          $sort: {
+            time: 1
+          }
+        }
+      })
+      .then(res => {
+        expect(res)
+          .to.have.property('data')
+          .lengthOf(0)
+      })
   })
 })

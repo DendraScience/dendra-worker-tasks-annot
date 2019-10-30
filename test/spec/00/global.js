@@ -1,7 +1,7 @@
 const chai = require('chai')
 const feathers = require('@feathersjs/feathers')
 const restClient = require('@feathersjs/rest-client')
-const request = require('request')
+const axios = require('axios')
 const app = feathers()
 
 const tm = require('@dendra-science/task-machine')
@@ -11,12 +11,12 @@ tm.configure({
 
 app.logger = console
 
-const WEB_API_URL = 'http://api.preview.dendra.science/v1'
+const WEB_API_URL = 'http://api.preview.dendra.science/v2'
 
 app.set('connections', {
   web: {
     // The Feathers app created by the worker service
-    app: feathers().configure(restClient(WEB_API_URL).request(request)),
+    app: feathers().configure(restClient(WEB_API_URL).axios(axios)),
 
     // Used to create a task-level Feathers app with authentication
     auth: {

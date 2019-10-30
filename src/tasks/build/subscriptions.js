@@ -4,7 +4,7 @@
 
 const processItem = require('./processItem')
 
-function handleMessage (msg) {
+function handleMessage(msg) {
   const { logger, m, subSubject } = this
 
   if (!msg) {
@@ -32,9 +32,16 @@ function handleMessage (msg) {
     // DEBUG: Memory usage
     // heap1 = process.memoryUsage().heapUsed
 
-    processItem({ data, dataObj, msgSeq }, this).then(() => msg.ack()).catch(err => {
-      logger.error('Message processing error', { msgSeq, subSubject, err, dataObj })
-    })
+    processItem({ data, dataObj, msgSeq }, this)
+      .then(() => msg.ack())
+      .catch(err => {
+        logger.error('Message processing error', {
+          msgSeq,
+          subSubject,
+          err,
+          dataObj
+        })
+      })
     // DEBUG: Memory usage
     // }).finally(() => {
     //   global.gc(true)
@@ -51,15 +58,18 @@ function handleMessage (msg) {
 }
 
 module.exports = {
-  guard (m) {
-    return !m.subscriptionsError &&
+  guard(m) {
+    return (
+      !m.subscriptionsError &&
       m.private.webConnection &&
-      m.private.stan && m.stanConnected &&
-      (m.subscriptionsTs !== m.versionTs) &&
+      m.private.stan &&
+      m.stanConnected &&
+      m.subscriptionsTs !== m.versionTs &&
       !m.private.subscriptions
+    )
   },
 
-  execute (m, { logger }) {
+  execute(m, { logger }) {
     const { stan, webConnection } = m.private
     const { authenticate } = webConnection
     const { passport } = webConnection.app
@@ -72,10 +82,10 @@ module.exports = {
       const source = m.sources[sourceKey]
       const {
         queue_group: queueGroup,
-        skip_matching_expr: skipMatchingExpr,
         sub_options: subOptions,
-        sub_to_subject: subSubject
+        sub_to_subject: subToSubj
       } = source
+      const subSubject = subToSubj.replace(/{([.\w]+)}/g, (_, k) => m[k])
 
       try {
         const opts = stan.subscriptionOptions()
@@ -85,29 +95,31 @@ module.exports = {
         opts.setMaxInFlight(1)
 
         if (subOptions) {
-          if (typeof subOptions.ack_wait === 'number') opts.setAckWait(subOptions.ack_wait)
-          if (typeof subOptions.durable_name === 'string') opts.setDurableName(subOptions.durable_name)
+          if (typeof subOptions.ack_wait === 'number')
+            opts.setAckWait(subOptions.ack_wait)
+          if (typeof subOptions.durable_name === 'string')
+            opts.setDurableName(subOptions.durable_name)
         }
 
-        const sub = (typeof queueGroup === 'string') ? stan.subscribe(subSubject, queueGroup, opts) : stan.subscribe(subSubject, opts)
+        const sub =
+          typeof queueGroup === 'string'
+            ? stan.subscribe(subSubject, queueGroup, opts)
+            : stan.subscribe(subSubject, opts)
 
-        const skipMatchingRegExp = (typeof skipMatchingExpr === 'string') ? new RegExp(skipMatchingExpr) : undefined
-        const skipMatching = (data, names) => {
-          return skipMatchingRegExp ? names.some(name => data && data[name] && skipMatchingRegExp.test(data[name])) : false
-        }
-
-        sub.on('message', handleMessage.bind({
-          annotationService,
-          authenticate,
-          datastreamService,
-          logger,
-          m,
-          passport,
-          skipMatching,
-          stan,
-          subSubject,
-          userService
-        }))
+        sub.on(
+          'message',
+          handleMessage.bind({
+            annotationService,
+            authenticate,
+            datastreamService,
+            logger,
+            m,
+            passport,
+            stan,
+            subSubject,
+            userService
+          })
+        )
 
         subs.push(sub)
       } catch (err) {
@@ -118,7 +130,7 @@ module.exports = {
     return subs
   },
 
-  assign (m, res, { logger }) {
+  assign(m, res, { logger }) {
     m.private.subscriptions = res
     m.subscriptionsTs = m.versionTs
 

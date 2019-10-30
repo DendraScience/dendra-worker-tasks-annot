@@ -5,36 +5,16 @@
 const pick = require('lodash/pick')
 const { getAuthUser } = require('../../../lib/helpers')
 
-const SKIP_FIELDS = [
-  'title',
-  'description'
-]
 const SPEC_DEFAULTS = {
   annotation: {},
   annotation_before: {}
 }
 
-async function processAnnotation (req, ctx) {
+async function processAnnotation(req, ctx) {
   // TODO: Add more logging
-  const {
-    datastreamService,
-    logger,
-    skipMatching
-  } = ctx
+  const { datastreamService, logger } = ctx
   const spec = Object.assign({}, SPEC_DEFAULTS, req.spec)
-  const {
-    annotation,
-    annotation_before: annotationBefore
-  } = spec
-
-  /*
-    Skip this request?
-   */
-
-  if (skipMatching(annotation, SKIP_FIELDS) || skipMatching(annotationBefore, SKIP_FIELDS)) {
-    logger.warn('Skipping request', { _id: req._id })
-    return {}
-  }
+  const { annotation, annotation_before: annotationBefore } = spec
 
   /*
     Authenticate and/or verify user credentials.
@@ -51,10 +31,13 @@ async function processAnnotation (req, ctx) {
   let datastreamIds = []
   let stationIds = []
 
-  if (annotation.datastream_ids) datastreamIds.push(...annotation.datastream_ids)
+  if (annotation.datastream_ids)
+    datastreamIds.push(...annotation.datastream_ids)
   if (annotation.station_ids) stationIds.push(...annotation.station_ids)
-  if (annotationBefore.datastream_ids) datastreamIds.push(...annotationBefore.datastream_ids)
-  if (annotationBefore.station_ids) stationIds.push(...annotationBefore.station_ids)
+  if (annotationBefore.datastream_ids)
+    datastreamIds.push(...annotationBefore.datastream_ids)
+  if (annotationBefore.station_ids)
+    stationIds.push(...annotationBefore.station_ids)
 
   stationIds = [...new Set(stationIds)]
 
@@ -73,7 +56,8 @@ async function processAnnotation (req, ctx) {
     }
     const datastreamRes = await datastreamService.find({ query })
 
-    if (datastreamRes.data) datastreamRes.data.forEach(item => datastreamIds.push(item._id))
+    if (datastreamRes.data)
+      datastreamRes.data.forEach(item => datastreamIds.push(item._id))
   }
 
   datastreamIds = [...new Set(datastreamIds)]
@@ -87,9 +71,15 @@ async function processAnnotation (req, ctx) {
 
     logger.info('Patching datastream', { _id: datastreamId, query })
 
-    await datastreamService.patch(datastreamId, { $set: {
-      source_type: 'sensor'
-    } }, { query }) // Trigger rebuild
+    await datastreamService.patch(
+      datastreamId,
+      {
+        $set: {
+          source_type: 'sensor'
+        }
+      },
+      { query }
+    ) // Trigger rebuild
   }
 
   return { datastreamIds }

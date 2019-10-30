@@ -11,7 +11,7 @@ const localStorage = require('localstorage-memory');
 
 const restClient = require('@feathersjs/rest-client');
 
-const request = require('request');
+const axios = require('axios');
 
 const murmurHash3 = require('murmurhash3js');
 
@@ -26,7 +26,7 @@ module.exports = {
     const cfg = m.$app.get('connections').web;
     const connection = {};
     const storageKey = connection.storageKey = murmurHash3.x86.hash128(`${m.key},${cfg.url}`);
-    const app = connection.app = feathers().configure(restClient(cfg.url).request(request)).configure(auth({
+    const app = connection.app = feathers().configure(restClient(cfg.url).axios(axios)).configure(auth({
       storage: localStorage,
       storageKey
     }));

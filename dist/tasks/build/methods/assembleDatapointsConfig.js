@@ -5,6 +5,8 @@
  */
 const cloneDeep = require('lodash/cloneDeep');
 
+const get = require('lodash/get');
+
 const pick = require('lodash/pick');
 
 const {
@@ -17,23 +19,21 @@ const {
 } = require('luxon');
 
 const DATE_TIME_OPTS = {
-  zone: 'utc' // Reasonable min and max dates to perform low-level querying
-  // NOTE: Didn't use min/max integer since db date conversion could choke
-  // NOTE: Revised to be within InfluxDB default dates
+  zone: 'utc'
+}; // Reasonable min and max dates to perform low-level querying
+// NOTE: Didn't use min/max integer since db date conversion could choke
+// NOTE: Revised to be within InfluxDB default dates
 
-};
 const MIN_TIME = Date.UTC(1800, 1, 2);
 const MAX_TIME = Date.UTC(2200, 1, 2);
 const MIN_DATE_TIME = DateTime.fromMillis(MIN_TIME, DATE_TIME_OPTS);
 const MAX_DATE_TIME = DateTime.fromMillis(MAX_TIME, DATE_TIME_OPTS);
-const SKIP_FIELDS = ['name', 'description'];
 const SPEC_DEFAULTS = {
   datastream: {}
-  /**
-   * Wraps an annotation document. Provides useful accessors and methods.
-   */
-
 };
+/**
+ * Wraps an annotation document. Provides useful accessors and methods.
+ */
 
 class Annotation {
   constructor(props) {
@@ -122,8 +122,19 @@ class ConfigInstance {
       actions
     } = this;
     /*
+      Check for and apply the 'attrib' actions.
+     */
+
+    const attribActions = doc.actions.filter(action => action.attrib);
+
+    if (attribActions.length) {
+      const objs = attribActions.map(action => action.attrib);
+      actions.attrib = Object.assign({}, actions.attrib, ...objs);
+    }
+    /*
       Check for and apply the 'evaluate' actions.
      */
+
 
     const evaluateActions = doc.actions.filter(action => action.evaluate);
 
@@ -164,7 +175,7 @@ class ConfigInstance {
     });
   }
 
-  mergedDoc() {
+  mergedDoc(datastream) {
     const {
       actions,
       annotationIds,
@@ -175,7 +186,17 @@ class ConfigInstance {
       begins_at: interval.start.toISO(),
       ends_before: interval.end.toISO()
     });
-    if (Object.keys(actions).length) newDoc.actions = actions;
+
+    if (Object.keys(actions).length) {
+      // Token replace attributes in evaluate expressions
+      if (actions.evaluate) {
+        const attributes = Object.assign({}, datastream.attributes, actions.attrib);
+        actions.evaluate = actions.evaluate.replace(/@{([.\w]+)}/g, (m, p) => get(attributes, p, null));
+      }
+
+      newDoc.actions = actions;
+    }
+
     if (annotationIds.length) newDoc.annotation_ids = annotationIds;
     return newDoc;
   }
@@ -218,6 +239,8 @@ function preprocessConfig(config) {
   const stack = []; // Efficiently merge config instances in a linear traversal
 
   config.map(doc => new ConfigInstance({
+    // Include initial actions, e.g. evaluate
+    actions: Object.assign({}, doc.actions),
     doc
   })).sort(configSortPredicate).forEach(inst => {
     if (inst.endsBeforeMillis <= inst.beginsAtMillis) {// Exclude: inverted interval
@@ -246,27 +269,15 @@ async function assembleDatapointsConfig(req, ctx) {
   const {
     annotationService,
     datastreamService,
-    logger,
-    skipMatching
+    logger
   } = ctx;
   const spec = Object.assign({}, SPEC_DEFAULTS, req.spec);
   const {
     datastream
   } = spec;
   /*
-    Skip this request?
-   */
-
-  if (skipMatching(datastream, SKIP_FIELDS)) {
-    logger.warn('Skipping request', {
-      _id: req._id
-    });
-    return {};
-  }
-  /*
     Authenticate and/or verify user credentials.
    */
-
 
   await getAuthUser(ctx);
   /*
@@ -317,7 +328,7 @@ async function assembleDatapointsConfig(req, ctx) {
     }
   }
 
-  config = config.map(inst => inst.mergedDoc());
+  config = config.map(inst => inst.mergedDoc(datastream));
   /*
     Patch the datastream with the built config.
    */
