@@ -2,7 +2,6 @@
 
 Dendra Worker tasks for performing annotation side-effects.
 
-
 ## Instructions
 
 1. Be sure you have Node version 10.15.1. If you’re using nvm, you may need to `nvm use 10.15.1`.

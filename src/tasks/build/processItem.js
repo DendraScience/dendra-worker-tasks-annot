@@ -34,8 +34,6 @@ async function processItem({ data, dataObj, msgSeq }, ctx) {
       startedAt,
       finishedAt
     })
-
-    // TODO: Store build results
   } catch (err) {
     logger.error('Processing error', { msgSeq, subSubject, err, dataObj })
   }

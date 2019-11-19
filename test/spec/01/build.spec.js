@@ -59,12 +59,12 @@ describe('build tasks', function() {
         {
           description: 'Build annotations based on a method',
           // NOTE: Deprecated in favor of consistent hashing
-          // queue_group: 'dendra.annotationBuild.v1',
+          // queue_group: 'dendra.annotationBuild.v2',
           sub_options: {
             ack_wait: 3600000,
             durable_name: '20181223'
           },
-          sub_to_subject: 'dendra.annotationBuild.v1.req.{hostOrdinal}'
+          sub_to_subject: 'dendra.annotationBuild.v2.req.{hostOrdinal}'
         }
       ],
       created_at: now,
@@ -72,7 +72,7 @@ describe('build tasks', function() {
     }
   }
 
-  const requestSubject = 'dendra.annotationBuild.v1.req.0'
+  const requestSubject = 'dendra.annotationBuild.v2.req.0'
   const testName = 'dendra-worker-tasks-annot UNIT_TEST'
   const evaluate = 'v = v * @{one} * @{obj.ten}'
   const evaluateRepl = 'v = v * 1 * 10'
@@ -110,7 +110,7 @@ describe('build tasks', function() {
   const removeDocuments = async (path, query) => {
     const res = await webConnection.app.service(path).find({ query })
 
-    for (let doc of res.data) {
+    for (const doc of res.data) {
       await webConnection.app.service(path).remove(doc._id)
     }
   }
@@ -168,181 +168,197 @@ describe('build tasks', function() {
     await authWebConnection()
     await cleanup()
 
-    id.org = (await webConnection.app.service('/organizations').create({
-      name: testName
-    }))._id
+    id.org = (
+      await webConnection.app.service('/organizations').create({
+        name: testName
+      })
+    )._id
 
-    id.station = (await webConnection.app.service('/stations').create({
-      is_active: true,
-      is_enabled: true,
-      is_stationary: true,
-      name: testName,
-      organization_id: id.org,
-      station_type: 'weather',
-      time_zone: 'PST',
-      utc_offset: -28800
-    }))._id
+    id.station = (
+      await webConnection.app.service('/stations').create({
+        is_active: true,
+        is_enabled: true,
+        is_stationary: true,
+        name: testName,
+        organization_id: id.org,
+        station_type: 'weather',
+        time_zone: 'PST',
+        utc_offset: -28800
+      })
+    )._id
 
-    id.annotation1 = (await webConnection.app.service('/annotations').create({
-      actions: [
-        {
-          exclude: true
-        }
-      ],
-      intervals: [
-        {
-          // begins_at: '',
-          ends_before: date.b
-        }
-      ],
-      description: testName,
-      is_enabled: true,
-      organization_id: id.org,
-      state: 'approved',
-      station_ids: [id.station],
-      title: `${testName} #1`
-    }))._id
+    id.annotation1 = (
+      await webConnection.app.service('/annotations').create({
+        actions: [
+          {
+            exclude: true
+          }
+        ],
+        intervals: [
+          {
+            // begins_at: '',
+            ends_before: date.b
+          }
+        ],
+        description: testName,
+        is_enabled: true,
+        organization_id: id.org,
+        state: 'approved',
+        station_ids: [id.station],
+        title: `${testName} #1`
+      })
+    )._id
 
-    id.annotation2 = (await webConnection.app.service('/annotations').create({
-      actions: [
-        {
-          exclude: true
-        }
-      ],
-      intervals: [
-        {
-          begins_at: date.c,
-          ends_before: date.d
-        }
-      ],
-      description: testName,
-      is_enabled: true,
-      organization_id: id.org,
-      state: 'approved',
-      station_ids: [id.station],
-      title: `${testName} #2`
-    }))._id
+    id.annotation2 = (
+      await webConnection.app.service('/annotations').create({
+        actions: [
+          {
+            exclude: true
+          }
+        ],
+        intervals: [
+          {
+            begins_at: date.c,
+            ends_before: date.d
+          }
+        ],
+        description: testName,
+        is_enabled: true,
+        organization_id: id.org,
+        state: 'approved',
+        station_ids: [id.station],
+        title: `${testName} #2`
+      })
+    )._id
 
-    id.annotation3 = (await webConnection.app.service('/annotations').create({
-      actions: [
-        {
-          attrib: {
-            obj: {
-              ten: 10
+    id.annotation3 = (
+      await webConnection.app.service('/annotations').create({
+        actions: [
+          {
+            attrib: {
+              obj: {
+                ten: 10
+              }
             }
+          },
+          {
+            evaluate
+          },
+          {
+            evaluate
+          },
+          {
+            exclude: true
+          },
+          {
+            flag: ['X', 'Y']
+          }
+        ],
+        intervals: [
+          {
+            begins_at: date.d,
+            ends_before: date.f
+          }
+        ],
+        description: testName,
+        is_enabled: true,
+        organization_id: id.org,
+        state: 'approved',
+        station_ids: [id.station],
+        title: `${testName} #3`
+      })
+    )._id
+
+    id.annotation4 = (
+      await webConnection.app.service('/annotations').create({
+        actions: [
+          {
+            exclude: true
+          }
+        ],
+        intervals: [
+          {
+            begins_at: date.f,
+            ends_before: date.g
+          }
+        ],
+        description: testName,
+        is_enabled: true,
+        organization_id: id.org,
+        state: 'approved',
+        station_ids: [id.station],
+        title: `${testName} #4`
+      })
+    )._id
+
+    id.annotation5 = (
+      await webConnection.app.service('/annotations').create({
+        actions: [
+          {
+            exclude: true
+          }
+        ],
+        intervals: [
+          {
+            begins_at: date.h
+            // ends_before: ''
+          }
+        ],
+        description: testName,
+        is_enabled: true,
+        organization_id: id.org,
+        state: 'approved',
+        station_ids: [id.station],
+        title: `${testName} #5`
+      })
+    )._id
+
+    id.datastream = (
+      await webConnection.app.service('/datastreams').create({
+        attributes: {
+          one: 1,
+          obj: {
+            ten: 1
           }
         },
-        {
-          evaluate
-        },
-        {
-          evaluate
-        },
-        {
-          exclude: true
-        },
-        {
-          flag: ['X', 'Y']
-        }
-      ],
-      intervals: [
-        {
-          begins_at: date.d,
-          ends_before: date.f
-        }
-      ],
-      description: testName,
-      is_enabled: true,
-      organization_id: id.org,
-      state: 'approved',
-      station_ids: [id.station],
-      title: `${testName} #3`
-    }))._id
-
-    id.annotation4 = (await webConnection.app.service('/annotations').create({
-      actions: [
-        {
-          exclude: true
-        }
-      ],
-      intervals: [
-        {
-          begins_at: date.f,
-          ends_before: date.g
-        }
-      ],
-      description: testName,
-      is_enabled: true,
-      organization_id: id.org,
-      state: 'approved',
-      station_ids: [id.station],
-      title: `${testName} #4`
-    }))._id
-
-    id.annotation5 = (await webConnection.app.service('/annotations').create({
-      actions: [
-        {
-          exclude: true
-        }
-      ],
-      intervals: [
-        {
-          begins_at: date.h
-          // ends_before: ''
-        }
-      ],
-      description: testName,
-      is_enabled: true,
-      organization_id: id.org,
-      state: 'approved',
-      station_ids: [id.station],
-      title: `${testName} #5`
-    }))._id
-
-    id.datastream = (await webConnection.app.service('/datastreams').create({
-      attributes: {
-        one: 1,
-        obj: {
-          ten: 1
-        }
-      },
-      datapoints_config: [
-        {
-          begins_at: date.a,
-          ends_before: date.e,
-          params: {
-            query: {
-              compact: true,
-              datastream_id: 3358,
-              time_adjust: -28800
-            }
+        datapoints_config: [
+          {
+            begins_at: date.a,
+            ends_before: date.e,
+            params: {
+              query: {
+                compact: true,
+                datastream_id: 3358,
+                time_adjust: -28800
+              }
+            },
+            path: '/legacy/datavalues-ucnrs'
           },
-          path: '/legacy/datavalues-ucnrs'
-        },
-        {
-          begins_at: date.e,
-          // ends_before: '',
-          params: {
-            query: {
-              api: 'ucnrs',
-              db: 'station_ucac_angelo',
-              fc: 'source_tenmin',
-              sc: '"time", "TC_C_10_Avg"',
-              utc_offset: -28800,
-              coalesce: false
-            }
-          },
-          path: '/influx/select'
-        }
-      ],
-      description: testName,
-      is_enabled: true,
-      name: testName,
-      organization_id: id.org,
-      source_type: 'sensor',
-      station_id: id.station,
-      terms: {}
-    }))._id
+          {
+            begins_at: date.e,
+            // ends_before: '',
+            params: {
+              query: {
+                api: 'ucnrs',
+                db: 'station_ucac_angelo',
+                fc: 'source_tenmin',
+                sc: '"time", "TC_C_10_Avg"',
+                utc_offset: -28800,
+                coalesce: false
+              }
+            },
+            path: '/influx/select'
+          }
+        ],
+        description: testName,
+        is_enabled: true,
+        name: testName,
+        organization_id: id.org,
+        source_type: 'sensor',
+        station_id: id.station,
+        terms: {}
+      })
+    )._id
   })
 
   after(async function() {
@@ -397,7 +413,7 @@ describe('build tasks', function() {
 
         // Check for defaults
         expect(model).to.have.nested.property(
-          'sources.dendra_annotationBuild_v1_req__hostOrdinal_.some_default',
+          'sources.dendra_annotationBuild_v2_req__hostOrdinal_.some_default',
           'default'
         )
       })
@@ -413,6 +429,7 @@ describe('build tasks', function() {
             $gte: '2013-05-07T23:00:00.000Z',
             $lt: '2013-05-07T23:30:00.000Z'
           },
+          t_local: true,
           $limit: 10,
           $sort: {
             time: 1
@@ -424,8 +441,8 @@ describe('build tasks', function() {
           .to.have.property('data')
           .lengthOf(2)
           .and.deep.include.ordered.members([
-            { t: '2013-05-07T23:10:00.000Z', o: -28800, v: 13.79 },
-            { t: '2013-05-07T23:20:00.000Z', o: -28800, v: 13.86 }
+            { lt: '2013-05-07T15:10:00.000', o: -28800, v: 13.79 },
+            { lt: '2013-05-07T15:20:00.000', o: -28800, v: 13.86 }
           ])
       })
   })
@@ -440,6 +457,7 @@ describe('build tasks', function() {
             $gte: '2018-05-09T19:00:00.000Z',
             $lt: '2018-05-09T19:20:00.000Z'
           },
+          t_local: true,
           $limit: 10,
           $sort: {
             time: 1
@@ -451,8 +469,8 @@ describe('build tasks', function() {
           .to.have.property('data')
           .lengthOf(2)
           .and.deep.include.ordered.members([
-            { t: '2018-05-09T19:00:00.000Z', o: -28800, v: 17.25 },
-            { t: '2018-05-09T19:10:00.000Z', o: -28800, v: 15.99 }
+            { lt: '2018-05-09T11:00:00.000', o: -28800, v: 17.25 },
+            { lt: '2018-05-09T11:10:00.000', o: -28800, v: 15.99 }
           ])
       })
   })
@@ -531,7 +549,7 @@ describe('build tasks', function() {
 
   it('should process assembleDatapointsConfig request', function() {
     const msgStr = JSON.stringify({
-      _id: 'assemble-dayapoints-config-1234',
+      _id: 'assemble-datapoints-config-1234',
       method: 'assembleDatapointsConfig',
       spec: {
         datastream

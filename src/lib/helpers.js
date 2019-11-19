@@ -3,7 +3,7 @@
  */
 
 async function getAuthUser({ authenticate, logger, passport, userService }) {
-  let accessToken = await passport.getJWT()
+  const accessToken = await passport.getJWT()
   let user
 
   if (accessToken) {

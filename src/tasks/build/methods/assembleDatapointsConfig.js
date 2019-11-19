@@ -73,6 +73,7 @@ class ConfigInstance {
       this._beginsAt = fromISO(this.doc.begins_at, MIN_DATE_TIME)
     return this._beginsAt
   }
+
   set beginsAt(value) {
     this._beginsAt = value
   }
@@ -80,6 +81,7 @@ class ConfigInstance {
   get beginsAtMillis() {
     return this.beginsAt.toMillis()
   }
+
   set beginsAtMillis(value) {
     this.beginsAt = DateTime.fromMillis(value, DATE_TIME_OPTS)
   }
@@ -89,6 +91,7 @@ class ConfigInstance {
       this._endsBefore = fromISO(this.doc.ends_before, MAX_DATE_TIME)
     return this._endsBefore
   }
+
   set endsBefore(value) {
     this._endsBefore = value
   }
@@ -96,6 +99,7 @@ class ConfigInstance {
   get endsBeforeMillis() {
     return this.endsBefore.toMillis()
   }
+
   set endsBeforeMillis(value) {
     this.endsBefore = DateTime.fromMillis(value, DATE_TIME_OPTS)
   }
@@ -103,6 +107,7 @@ class ConfigInstance {
   get interval() {
     return Interval.fromDateTimes(this.beginsAt, this.endsBefore)
   }
+
   set interval(value) {
     this.beginsAt = value.start
     this.endsBefore = value.end
@@ -336,7 +341,7 @@ async function assembleDatapointsConfig(req, ctx) {
    */
 
   query = {
-    version_id: datastream.version_id
+    source_type: 'sensor'
   }
 
   logger.info('Patching datastream', { _id: datastream._id, query })

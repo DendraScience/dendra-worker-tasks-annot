@@ -36,7 +36,7 @@ async function processItem({
       subSubject,
       startedAt,
       finishedAt
-    }); // TODO: Store build results
+    });
   } catch (err) {
     logger.error('Processing error', {
       msgSeq,

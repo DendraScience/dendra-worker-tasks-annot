@@ -334,7 +334,7 @@ async function assembleDatapointsConfig(req, ctx) {
    */
 
   query = {
-    version_id: datastream.version_id
+    source_type: 'sensor'
   };
   logger.info('Patching datastream', {
     _id: datastream._id,

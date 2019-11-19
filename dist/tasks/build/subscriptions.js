@@ -69,7 +69,7 @@ function handleMessage(msg) {
 
 module.exports = {
   guard(m) {
-    return !m.subscriptionsError && m.private.webConnection && m.private.stan && m.stanConnected && m.subscriptionsTs !== m.versionTs && !m.private.subscriptions;
+    return !m.subscriptionsError && m.private.webConnection && m.private.stan && m.stanConnected && m.sourcesTs === m.versionTs && m.subscriptionsTs !== m.versionTs && !m.private.subscriptions;
   },
 
   execute(m, {
@@ -92,7 +92,6 @@ module.exports = {
     m.sourceKeys.forEach(sourceKey => {
       const source = m.sources[sourceKey];
       const {
-        queue_group: queueGroup,
         sub_options: subOptions,
         sub_to_subject: subToSubj
       } = source;
@@ -109,7 +108,7 @@ module.exports = {
           if (typeof subOptions.durable_name === 'string') opts.setDurableName(subOptions.durable_name);
         }
 
-        const sub = typeof queueGroup === 'string' ? stan.subscribe(subSubject, queueGroup, opts) : stan.subscribe(subSubject, opts);
+        const sub = stan.subscribe(subSubject, opts);
         sub.on('message', handleMessage.bind({
           annotationService,
           authenticate,
