@@ -507,14 +507,14 @@ describe('build tasks', function() {
       method: 'processAnnotation',
       spec: {
         annotation: {
-          _id: '592f155746a1b867a114e0a0',
+          _id: id.annotation5,
           datastream_ids: [id.datastream],
           is_enabled: true,
           organization_id: id.org,
           title: testName
         },
         annotation_before: {
-          _id: '592f155746a1b867a114e0a0',
+          _id: id.annotation5,
           is_enabled: false,
           organization_id: id.org,
           station_ids: [id.station],
@@ -544,6 +544,18 @@ describe('build tasks', function() {
         expect(doc).to.not.have.property('version_id', datastream.version_id)
 
         datastream = doc
+      })
+  })
+
+  it('should verify annotation patch after processAnnotation', function() {
+    return webConnection.app
+      .service('/annotations')
+      .get(id.annotation5)
+      .then(doc => {
+        expect(doc).to.have.nested.property(
+          'affected_station_ids.0',
+          id.station
+        )
       })
   })
 

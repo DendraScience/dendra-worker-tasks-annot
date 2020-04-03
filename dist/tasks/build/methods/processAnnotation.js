@@ -17,6 +17,7 @@ const SPEC_DEFAULTS = {
 async function processAnnotation(req, ctx) {
   // TODO: Add more logging
   const {
+    annotationService,
     datastreamService,
     logger
   } = ctx;
@@ -77,15 +78,30 @@ async function processAnnotation(req, ctx) {
       _id: datastreamId,
       query
     });
-    await datastreamService.patch(datastreamId, {
+    const patchRes = await datastreamService.patch(datastreamId, {
       $set: {
         source_type: 'sensor'
       }
     }, {
       query
     }); // Trigger rebuild
-  }
 
+    if (patchRes.station_id) stationIds.push(patchRes.station_id);
+  }
+  /*
+    Patch the annotation with the affected stations.
+   */
+
+
+  stationIds = [...new Set(stationIds)];
+  logger.info('Patching annotation', {
+    _id: annotation._id
+  });
+  await annotationService.patch(annotation._id, {
+    $set: {
+      affected_station_ids: stationIds
+    }
+  });
   return {
     datastreamIds
   };
