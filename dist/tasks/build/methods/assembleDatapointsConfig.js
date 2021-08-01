@@ -235,6 +235,34 @@ function fromISO(iso, invalid) {
   return dateTime.isValid ? dateTime : invalid;
 }
 
+function createRefs(config) {
+  const refd = [];
+
+  for (const inst of config) {
+    const {
+      connection,
+      params,
+      path
+    } = inst;
+    delete inst.connection;
+    delete inst.params;
+    delete inst.path;
+    inst.ref = refd.length;
+    refd.push(Object.assign({}, connection ? {
+      connection
+    } : undefined, params ? {
+      params
+    } : undefined, path ? {
+      path
+    } : undefined));
+  }
+
+  return {
+    config,
+    refd
+  };
+}
+
 function preprocessConfig(config) {
   const stack = []; // Efficiently merge config instances in a linear traversal
 
@@ -319,7 +347,11 @@ async function assembleDatapointsConfig(req, ctx) {
     Update the datapoints config based on each annotation.
    */
 
-  let config = preprocessConfig(datastream.datapoints_config || []);
+  let {
+    config,
+    refd
+  } = createRefs(datastream.datapoints_config || []);
+  config = preprocessConfig(config);
 
   for (const annotation of annotations) {
     if (annotation.hasActions()) {
@@ -342,7 +374,8 @@ async function assembleDatapointsConfig(req, ctx) {
   });
   return datastreamService.patch(datastream._id, {
     $set: {
-      datapoints_config_built: config
+      datapoints_config_built: config,
+      datapoints_config_refd: refd
     }
   }, {
     query
